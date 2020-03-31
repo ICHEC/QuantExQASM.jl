@@ -17,11 +17,13 @@ using UUIDs
 cct_runs = 0
 
 #Create temporary directory hold intermdiate QASM files
-cct_dir = "/tmp/cct_dir_" * string(UUIDs.uuid4()) * "/" 
+cct_dir = "/tmp/cct_dir_" * string(UUIDs.uuid1()) * "/" 
 
 function __init__()
     init_env()
-    mkdir(cct_dir)
+    if ~isdir(cct_dir)
+        mkdir(cct_dir)
+    end
 end
 
 """
