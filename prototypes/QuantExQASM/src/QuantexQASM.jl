@@ -1,5 +1,5 @@
 """
-    QuantexQASM.jl - Initial implementation of OpenQASM generator for 
+    QuantExQASM.jl - Initial implementation of OpenQASM generator for 
     different quantum algorithms.
 
 # Example: QFT
@@ -8,7 +8,7 @@ The `gen_qft` function will output a semi-colon delimited string of instructions
 in OpenqASM format.
 
 ```julia
-using QuantexQASM
+using QuantExQASM
 q_register = "myReg"
 qubit_indices = Array{Int64}(0:5)
 
@@ -22,7 +22,7 @@ print(format_string_nl(output))
 ```
 """
 
-module QuantexQASM
+module QuantExQASM
 
 #Automagically export all symbols from included modules
 using Reexport
@@ -35,5 +35,10 @@ include("Utils.jl")
 @reexport using .Utils
 include("VQE.jl")
 @reexport using .VQE
+
+include("Decomposition.jl")
+@reexport using .Decomposition
+include("NCU.jl")
+@reexport using .NCU
 
 end 
