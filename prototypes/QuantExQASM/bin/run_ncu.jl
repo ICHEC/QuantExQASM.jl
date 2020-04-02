@@ -1,9 +1,10 @@
 using Pkg
-Pkg.activate("../QuantExQASM")
+dir_path = @__DIR__
+Pkg.activate(dir_path * "/..")
 using QuantExQASM
 
 X = QuantExQASM.NCU.GateOps.default_gates["X"]
-ctrl = collect(0:3)
+ctrl = collect(0:2)
 aux = Array{Int64,1}()
 tgt = length(ctrl)
 
