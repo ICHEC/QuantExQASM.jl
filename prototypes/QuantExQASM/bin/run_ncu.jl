@@ -4,7 +4,7 @@ using QuantExQASM
 
 X = QuantExQASM.NCU.GateOps.default_gates["X"]
 
-ctrl = collect(0:2)
+ctrl = collect(0:3)
 aux = Array{Int64,1}()
 tgt = length(ctrl)
 

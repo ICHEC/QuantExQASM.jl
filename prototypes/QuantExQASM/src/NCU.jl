@@ -87,7 +87,7 @@ function NCU_3Opt(q_reg::String, ctrls::Vector{Int}, tgt::Int, gate::GateOps.Gat
     cct_string *= GateOps.apply_gate_cx(q_reg, ctrls[1], ctrls[2])
 
     cct_string *= GateOps.apply_gate_cu(g, q_reg, ctrls[2], tgt)
-    cct_string *= GateOps.apply_gate_cx(q_reg, ctrls[1], ctrls[2])
+    cct_string *= GateOps.apply_gate_cx(q_reg, ctrls[2], ctrls[3])
     cct_string *= GateOps.apply_gate_cu(g_adj, q_reg, ctrls[3], tgt)
     cct_string *= GateOps.apply_gate_cx(q_reg, ctrls[1], ctrls[3])
 
