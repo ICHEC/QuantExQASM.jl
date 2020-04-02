@@ -1,9 +1,9 @@
 using Pkg
-dir_path = @__DIR__
-Pkg.activate(dir_path * "/..")
+Pkg.activate(normpath(joinpath(@__DIR__, ".."))) # Activate package from repo if it is not installed
 using QuantExQASM
 
 X = QuantExQASM.NCU.GateOps.default_gates["X"]
+
 ctrl = collect(0:2)
 aux = Array{Int64,1}()
 tgt = length(ctrl)
