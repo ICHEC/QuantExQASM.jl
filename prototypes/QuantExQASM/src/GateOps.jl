@@ -281,7 +281,7 @@ end
     Apply controlled unitary (CU) gate.
 """
 function apply_gate_cu(angles::bloch_angles, q_reg::String, q_ctrl_idx::Int, q_tgt_idx::Int)
-    result = replace(qasm_map["CU"], "q_reg[q_idx]"=>"$q_reg[$q_ctrl_idx]")
+    result = replace(qasm_map["CU_Decomp"], "ctrl"=>"$q_reg[$q_ctrl_idx]")
     result = replace(result, "tgt"=>"$q_reg[$q_tgt_idx]")
     result = replace(result, "theta"=>pi_convert(angles.θ))
     result = replace(result, "phi"=>pi_convert(angles.ϕ))

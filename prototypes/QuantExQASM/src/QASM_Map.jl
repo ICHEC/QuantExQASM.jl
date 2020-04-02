@@ -23,7 +23,8 @@ function define_qasm_mapping()
     qasm_map = Dict{String, String}()
 
     qasm_map["U"] = "u3(theta,phi,lambda) q_reg[q_idx];"
-    qasm_map["CU"] = "cu3(theta,phi,lambda) q_reg[q_idx], tgt;"
+    qasm_map["CU"] = "cu3(theta,phi,lambda) ctrl, tgt;"
+    qasm_map["CU_Decomp"] = "u1((lambda+phi)/2) ctrl;u1((lambda-phi)/2) tgt;cx ctrl, tgt;u3(-theta/2,0,-(phi+lambda)/2) tgt;cx ctrl,tgt;u3(theta/2,phi,0) tgt;"
     qasm_map["CX"] = "CX ctrl,tgt;"
     qasm_map["T"] = "t q_reg[q_idx];"
     qasm_map["TDG"] = "tdg q_reg[q_idx];"
