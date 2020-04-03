@@ -101,7 +101,7 @@ end
     Apply Pauli-X to qubit `q_idx` in register `q_reg`.
 """
 function apply_gate_x(q_reg::String, q_idx::Union{Int, Nothing}=nothing)
-    return apply_gate_u( default_gates["X"], q_reg, q_idx)
+    return apply_gate_u( default_gates["X"].angles, q_reg, q_idx)
 end
 """
     apply_gate_y(q_reg::String, q_idx::Union{Int, Nothing}=nothing)
@@ -109,7 +109,7 @@ end
     Apply Pauli-Y to qubit `q_idx` in register `q_reg`.
 """
 function apply_gate_y(q_reg::String, q_idx::Union{Int, Nothing}=nothing)
-    return apply_gate_u( default_gates["Y"], q_reg, q_idx)
+    return apply_gate_u( default_gates["Y"].angles, q_reg, q_idx)
 end
 """
     apply_gate_z(q_reg::String, q_idx::Union{Int, Nothing}=nothing)
@@ -117,7 +117,7 @@ end
     Apply Pauli-Z to qubit `q_idx` in register `q_reg`.
 """
 function apply_gate_z(q_reg::String, q_idx::Union{Int, Nothing}=nothing)
-    return apply_gate_u( default_gates["Z"], q_reg, q_idx)
+    return apply_gate_u( default_gates["Z"].angles, q_reg, q_idx)
 end
 """
     apply_gate_h(q_reg::String, q_idx::Union{Int, Nothing}=nothing)
@@ -125,7 +125,7 @@ end
     Apply Hadamard to qubit `q_idx` in register `q_reg`.
 """
 function apply_gate_h(q_reg::String, q_idx::Union{Int, Nothing}=nothing)
-    return apply_gate_u( default_gates["H"], q_reg, q_idx)
+    return apply_gate_u( default_gates["H"].angles, q_reg, q_idx)
 end
 
 """
