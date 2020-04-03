@@ -41,4 +41,10 @@ include("Decomposition.jl")
 include("NCU.jl")
 @reexport using .NCU
 
+include("Oracle.jl")
+@reexport using .Oracle
+include("Diffusion.jl")
+@reexport using .Diffusion
+include("Grover.jl")
+
 end 

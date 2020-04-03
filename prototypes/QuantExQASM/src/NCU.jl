@@ -35,6 +35,7 @@ function apply_ncu(q_reg::String, ctrls::Vector{Int}, aux::Vector{Int}, tgt::Int
     elseif cOps >= 2 && cOps !=3
         circuit *= NCU_default(q_reg, ctrls, aux, tgt, gate, local_depth)
     else
+        @debug "CU( $(ctrls[1]), $(tgt) )  U = $(Decomposition.u3_to_gate(gate.angles, gate.label).mat) func=apply_ncu"
         circuit *= GateOps.apply_gate_cu(gate.angles, q_reg, ctrls[1], tgt)
     end
 
@@ -48,23 +49,35 @@ Uses additional qubits provided by `aux` register to optimise 2-qubit call depth
 function NCX_Opt(q_reg::String, ctrls::Vector{Int}, aux::Vector{Int}, tgt::Int)
     cct_string = ""
 
+    @debug "CCX( $(ctrls[end]), $(aux[ 1 + length(ctrls)-3 ]), $(tgt) ) func=NCX_Opt" 
     cct_string *= GateOps.apply_gate_ccx(q_reg, ctrls[end], aux[ 1 + length(ctrls)-3 ], tgt)
-    for i in reverse(3:length(ctrls)-1)
+
+    for i in reverse(2:length(ctrls)-2)
+        @debug "CCX( $(ctrls[1 + i]), $(aux[1 + (i-2)]), $(aux[1 + (i-1)]) ) func=NCX_Opt"
         cct_string *= GateOps.apply_gate_ccx(q_reg, ctrls[1 + i], aux[1 + (i-2)], aux[1 + (i-1)])
     end
 
+    @debug "CCX( $(ctrls[1]), $(ctrls[2]), $(aux[1]) ) func=NCX_Opt"
     cct_string *= GateOps.apply_gate_ccx(q_reg, ctrls[1], ctrls[2], aux[1])
-    for i in 3:length(ctrls)-1
+
+    for i in 2:length(ctrls)-2
+        @debug "CCX( $(ctrls[1 + i]), $(aux[1 + (i-2)]), $(aux[1 + (i-1)]) ) func=NCX_Opt"
         cct_string *= GateOps.apply_gate_ccx(q_reg, ctrls[1 + i], aux[1 + (i-2)], aux[1 + (i-1)])
     end
 
+    @debug "CCX( $(ctrls[end]), $(aux[1 + length(ctrls) - 3]), $(tgt) ) func=NCX_Opt"
     cct_string *= GateOps.apply_gate_ccx(q_reg, ctrls[end], aux[1 + length(ctrls) - 3], tgt)
-    for i in reverse(3:length(ctrls)-1)
+
+    for i in reverse(2:length(ctrls)-2)
+        @debug "CCX( $(ctrls[1 + i]), $(aux[1 + (i-2)]), $(aux[1 + (i-1)]) ) func=NCX_Opt"
         cct_string *= GateOps.apply_gate_ccx(q_reg, ctrls[1 + i], aux[1 + (i-2)], aux[1 + (i-1)])
     end
 
+    @debug "CCX( $(ctrls[1]), $(ctrls[2]), $(aux[1]) ) func=NCX_Opt"
     cct_string *= GateOps.apply_gate_ccx(q_reg, ctrls[1], ctrls[2], aux[1])
-    for i in 3:length(ctrls)-1
+
+    for i in 2:length(ctrls)-2
+        @debug "CCX( $(ctrls[1 + i]), $(aux[1 + (i-2)]), $(aux[1 + (i-1)]) ) func=NCX_Opt"
         cct_string *= GateOps.apply_gate_ccx(q_reg, ctrls[1 + i], aux[1 + (i-2)], aux[1 + (i-1)])
     end
 
@@ -78,24 +91,39 @@ Optimised gate-call depth for a 3CU gate; takes 17 gates -> 13
 function NCU_3Opt(q_reg::String, ctrls::Vector{Int}, tgt::Int, gate::GateOps.Gate)
     cct_string = ""
 
-    #Requires sqrt(gate) and sqrt(gate)^\dagger 
-    g, g_adj = Decomposition.gate_root_adj(gate.angles, 1)
+    #Requires (gate)^1/4 and sqrt(gate)^1/4 \dagger 
+    g, g_adj = Decomposition.gate_root_adj(gate)
+    g, g_adj = Decomposition.gate_root_adj(g)
 
-    cct_string *= GateOps.apply_gate_cu(g, q_reg, ctrls[1], tgt)
+
+    @debug "CU( $(ctrls[1]), $(tgt) )  U = $(Decomposition.u3_to_gate(g.angles, g.label).mat) func=NCU_3Opt"
+    cct_string *= GateOps.apply_gate_cu(g.angles, q_reg, ctrls[1], tgt)
+    @debug "CX( $(ctrls[1]), $(ctrls[2]) ) func=NCU_3Opt"
     cct_string *= GateOps.apply_gate_cx(q_reg, ctrls[1], ctrls[2])
-    cct_string *= GateOps.apply_gate_cu(g_adj, q_reg, ctrls[2], tgt)
+    @debug "CU( $(ctrls[2]), $(tgt) )  U = $(Decomposition.u3_to_gate(g_adj.angles, g_adj.label).mat) func=NCU_3Opt"
+    cct_string *= GateOps.apply_gate_cu(g_adj.angles, q_reg, ctrls[2], tgt)
+    @debug "CX( $(ctrls[1]), $(ctrls[2]) ) func=NCU_3Opt"
     cct_string *= GateOps.apply_gate_cx(q_reg, ctrls[1], ctrls[2])
 
-    cct_string *= GateOps.apply_gate_cu(g, q_reg, ctrls[2], tgt)
+    @debug "CU( $(ctrls[2]), $(tgt) )  U = $(Decomposition.u3_to_gate(g.angles, g.label).mat) func=NCU_3Opt"
+    cct_string *= GateOps.apply_gate_cu(g.angles, q_reg, ctrls[2], tgt)
+    @debug "CX( $(ctrls[2]), $(ctrls[3]) ) func=NCU_3Opt"
     cct_string *= GateOps.apply_gate_cx(q_reg, ctrls[2], ctrls[3])
-    cct_string *= GateOps.apply_gate_cu(g_adj, q_reg, ctrls[3], tgt)
+    @debug "CU( $(ctrls[3]), $(tgt) )  U = $(Decomposition.u3_to_gate(g_adj.angles, g_adj.label).mat) func=NCU_3Opt"
+    cct_string *= GateOps.apply_gate_cu(g_adj.angles, q_reg, ctrls[3], tgt)
+    @debug "CX( $(ctrls[1]), $(ctrls[3]) ) func=NCU_3Opt"
     cct_string *= GateOps.apply_gate_cx(q_reg, ctrls[1], ctrls[3])
 
-    cct_string *= GateOps.apply_gate_cu(g, q_reg, ctrls[3], tgt)
+    @debug "CU( $(ctrls[3]), $(tgt) )  U = $(Decomposition.u3_to_gate(g.angles, g.label).mat) func=NCU_3Opt"
+    cct_string *= GateOps.apply_gate_cu(g.angles, q_reg, ctrls[3], tgt)
+    @debug "CX( $(ctrls[2]), $(ctrls[3]) ) func=NCU_3Opt"
     cct_string *= GateOps.apply_gate_cx(q_reg, ctrls[2], ctrls[3])
-    cct_string *= GateOps.apply_gate_cu(g_adj, q_reg, ctrls[3], tgt)
+    @debug "CU( $(ctrls[3]), $(tgt) )  U = $(Decomposition.u3_to_gate(g_adj.angles, g_adj.label).mat) func=NCU_3Opt"
+    cct_string *= GateOps.apply_gate_cu(g_adj.angles, q_reg, ctrls[3], tgt)
+    @debug "CX( $(ctrls[1]), $(ctrls[3]) ) func=NCU_3Opt"
     cct_string *= GateOps.apply_gate_cx(q_reg, ctrls[1], ctrls[3])
-    cct_string *= GateOps.apply_gate_cu(g_adj, q_reg, ctrls[3], tgt)
+    @debug "CU( $(ctrls[3]), $(tgt) )  U = $(Decomposition.u3_to_gate(g.angles, g.label).mat) func=NCU_3Opt"
+    cct_string *= GateOps.apply_gate_cu(g.angles, q_reg, ctrls[3], tgt)
 
     return cct_string
 end
@@ -103,20 +131,21 @@ end
 function NCU_default(q_reg::String, ctrls::Vector{Int}, aux::Vector{Int}, tgt::Int, gate::GateOps.Gate, local_depth::Int)
     cct_string = ""
 
-    #Uses memoization to cache previousy used values
-    g, g_adj = Decomposition.gate_root_adj(gate.angles, local_depth)
+    #Uses memoization to cache previously used values
+    g, g_adj = Decomposition.gate_root_adj(gate)
 
-    #This may be incorrect; ensure unneeded sqrts are not calculated
-    g_root = GateOps.Gate( g, Decomposition.u3_to_matrix(g), gate.label )
+    @debug "CU( $(ctrls[end]), $(tgt) )  U = $(Decomposition.u3_to_gate(g.angles, g.label).mat) func=NCU_default"
+    cct_string *= GateOps.apply_gate_cu(g.angles, q_reg, ctrls[end], tgt)
 
-    cct_string *= GateOps.apply_gate_cu(g, q_reg, ctrls[end], tgt)
-    cct_string *= apply_ncu(q_reg, ctrls[1:end-1], aux, ctrls[end], GateOps.default_gates["X"], 0)
-    cct_string *= GateOps.apply_gate_cu(g_adj, q_reg, ctrls[end], tgt)
-    cct_string *= apply_ncu(q_reg, ctrls[1:end-1], aux, ctrls[end], GateOps.default_gates["X"], 0)
-    cct_string *= apply_ncu(q_reg, ctrls[1:end-1], aux, tgt, g_root, local_depth )
+    cct_string *= apply_ncu(q_reg, ctrls[1:end-1], vcat(aux,tgt), ctrls[end], GateOps.default_gates["X"], 0)
+
+    @debug "CU( $(ctrls[end]), $(tgt) )  U = $(Decomposition.u3_to_gate(g_adj.angles, g_adj.label).mat) func=NCU_default"
+    cct_string *= GateOps.apply_gate_cu(g_adj.angles, q_reg, ctrls[end], tgt)
+
+    cct_string *= apply_ncu(q_reg, ctrls[1:end-1], vcat(aux,tgt), ctrls[end], GateOps.default_gates["X"], 0)
+    cct_string *= apply_ncu(q_reg, ctrls[1:end-1], vcat(aux,ctrls[end]), tgt, g, local_depth )
 
     return cct_string
 end
-
 
 end

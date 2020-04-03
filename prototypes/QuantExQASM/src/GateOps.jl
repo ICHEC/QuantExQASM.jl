@@ -15,6 +15,9 @@ struct bloch_angles
     θ::Real
     ϕ::Real
     λ::Real
+    g_phase::Real
+    bloch_angles(θ,ϕ,λ) = new(θ,ϕ,λ,0.0)
+    bloch_angles(θ,ϕ,λ,g_phase) = new(θ,ϕ,λ,g_phase)
 end
 
 struct Gate
@@ -92,8 +95,16 @@ function apply_gate_u(angles::bloch_angles, q_reg::String, q_idx::Union{Int, Not
     else # Otherwise apply op to given qubit index
         result = replace(result, "q_idx"=>q_idx)
     end
+
+    # If there is a non-zero phase, apply that also
+    if ~isapprox(angles.g_phase, 0.0, atol=1e-5)
+        @debug "NON ZERO PHASE=$(angles.g_phase) func=apply_gate_u"
+        result *= apply_gate_phaseshift(q_reg, angles.g_phase, q_idx)
+    end
+
     return result
 end
+
 
 """
     apply_gate_x(q_reg::String, q_idx::Union{Int, Nothing}=nothing)
@@ -135,7 +146,7 @@ end
 """
 function apply_gate_t(q_reg::String, q_idx::Union{Int, Nothing}=nothing, is_adjoint::Union{Bool, Nothing}=nothing)
     #If no index given, apply same ops across entire register
-    if is_adjoint == nothing
+    if is_adjoint == nothing || is_adjoint == false
         result = qasm_map["T"]
     else
         result = qasm_map["TDG"]
@@ -158,7 +169,7 @@ end
 """
 function apply_gate_s(q_reg::String, q_idx::Union{Int, Nothing}=nothing, is_adjoint::Union{Bool, Nothing}=nothing)
     #If no index given, apply same ops across entire register
-    if is_adjoint == nothing
+    if is_adjoint == nothing || is_adjoint == false
         result = qasm_map["S"]
     else
         result = qasm_map["SDG"]
@@ -276,6 +287,18 @@ end
 
 
 """
+    apply_gate_phaseshift(q_reg::String, λ::Real, q_ctrl_idx::Int, q_tgt_idx::Int)
+
+    Apply diagonal phase shifting gate [[exp(iλ), 0],[0, exp(iλ)]]
+"""
+function apply_gate_phaseshift(q_reg::String, λ::Real, q_tgt_idx::Int)
+    result = apply_gate_x( q_reg, q_tgt_idx);
+    result *=  apply_gate_u( bloch_angles(0, 0, λ), q_reg, q_tgt_idx);
+    result *= apply_gate_x( q_reg, q_tgt_idx);
+    result *= apply_gate_u( bloch_angles(0, 0, λ), q_reg, q_tgt_idx);
+end
+
+"""
     apply_gate_cu(angles::bloch_angles, q_reg::String, q_ctrl_idx::Int, q_tgt_idx::Int)
 
     Apply controlled unitary (CU) gate.
@@ -286,6 +309,13 @@ function apply_gate_cu(angles::bloch_angles, q_reg::String, q_ctrl_idx::Int, q_t
     result = replace(result, "theta"=>pi_convert(angles.θ))
     result = replace(result, "phi"=>pi_convert(angles.ϕ))
     result = replace(result, "lambda"=>pi_convert(angles.λ))
+
+    # If there is a non-zero phase, apply that to q_tgt_idx
+    if ~isapprox(angles.g_phase, 0, atol=1e-5)
+        @debug "NON ZERO PHASE=$(angles.g_phase) func=apply_gate_cu"
+        result *= apply_gate_phaseshift(q_reg, angles.g_phase, q_tgt_idx)
+    end
+
     return result
 end
 

@@ -5,6 +5,7 @@ version = "0.1.0"
 
 [deps]
 Conda = "8f4d0f93-b110-5947-807f-2305c1781a2d"
+DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
 GR = "28b8d3ca-fb5f-59d9-8090-bfdbd6d07a71"
 LRUCache = "8ac3fa9e-de4c-5943-b1dc-09c6b5f20637"
 Memoize = "c03570c3-d221-55d1-a50c-7939bbd78826"

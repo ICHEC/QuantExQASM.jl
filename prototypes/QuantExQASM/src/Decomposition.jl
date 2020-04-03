@@ -16,42 +16,32 @@ function __init__()
 end
 
 """
-    gate_root_adj(gate::Matrix{<:Number}, decomp_depth::Int)
+    gate_root_adj(angles::GateOps.Gate, decomp_depth::Int)
 
-Calculate intermediate rooted gates and cache intermediates for faster recall using matrix gate definition
-"""
-@memoize Dict function gate_root_adj(gate::Matrix{<:Number}, decomp_depth::Int)
-    result = sqrt(gate)
+Calculate intermediate rooted gates using U3 gate definition
+@memoize Dict function gate_root_adj( gate::GateOps.Gate, decomp_depth::Int )
+    result = sqrt_gate(gate)
     if decomp_depth > 1
         return gate_root_adj(result, decomp_depth-1)
     elseif decomp_depth == 1
-        return (result, collect(adjoint(result)))
+        return (result, adjoint_gate(result))
     else
-        return (gate, collect(adjoint(gate)))
+        return (gate, adjoint_gate(gate))
     end
 end
-
+"""
 
 """
-    gate_root_adj(angles::GateOps.bloch_angles, decomp_depth::Int)
+    gate_root_adj(angles::GateOps.Gate, decomp_depth::Int)
 
 Calculate intermediate rooted gates using U3 gate definition
 """
-@memoize Dict function gate_root_adj(angles::GateOps.bloch_angles, decomp_depth::Int)
-    g_mat = u3_to_matrix(angles)
-    g, g_adj = gate_root_adj(g_mat, decomp_depth)
-    return (matrix_to_u3(g), matrix_to_u3(g_adj))
+@memoize Dict function gate_root_adj( gate::GateOps.Gate )
+    result = sqrt_gate(gate)
+    return (result, adjoint_gate(result))
 end
 
 
-"""
-    u3_to_matrix(angles::GateOps.bloch_angles)
-
-Convert Euler angles to SU2 matrix
-"""
-function u3_to_matrix(angles::GateOps.bloch_angles)
-    return u3(angles.θ, angles.ϕ, angles.λ).to_matrix()
-end
 
 """
     matrix_to_u3(mat::Matrix{<:Number} )
@@ -59,8 +49,43 @@ end
 Convert SU2 matrix to Euler angles 
 """
 function matrix_to_u3(mat::Matrix{<:Number})
-    θ, ϕ, λ = euler_decomposer._angles(mat)
-    return GateOps.bloch_angles(θ, ϕ, λ)
+    θ, ϕ, λ, phase = euler_decomposer.angles_and_phase(mat)
+    return θ, ϕ, λ, phase
+end
+
+
+"""
+    u3_to_gate(angles::GateOps.bloch_angles)
+
+Convert Euler angles to SU2 matrix
+"""
+function u3_to_gate(angles::GateOps.bloch_angles, label::String)
+    m = u3(angles.θ, angles.ϕ, angles.λ).to_matrix().*exp(1im*angles.g_phase)
+    g = GateOps.Gate(angles, m, label)
+    return g
+end
+
+"""
+    sqrt_gate(angles::GateOps.bloch_angles)
+
+Calculate sqrt of Gate and return as GateOps.Gate
+"""
+function sqrt_gate(gate::GateOps.Gate)
+    mat = u3(gate.angles.θ, gate.angles.ϕ, gate.angles.λ).to_matrix().*exp(1im*gate.angles.g_phase)
+    sq_mat = sqrt(mat)
+    θ, ϕ, λ, phase = matrix_to_u3(sq_mat)
+    return GateOps.Gate(GateOps.bloch_angles(θ, ϕ, λ, phase), sq_mat, "sqrt(" * gate.label * ")")
+end
+
+"""
+    adjoint_gate(angles::GateOps.bloch_angles)
+
+Calculate adjoint of Gate and return as GateOps.Gate
+"""
+function adjoint_gate(gate::GateOps.Gate)
+    mat = collect(adjoint(u3(gate.angles.θ, gate.angles.ϕ, gate.angles.λ).to_matrix().*exp(1im*gate.angles.g_phase)))
+    θ, ϕ, λ, phase = matrix_to_u3(mat)
+    return GateOps.Gate(GateOps.bloch_angles(θ, ϕ, λ, phase), mat, "adj(" * gate.label * ")")
 end
 
 end

@@ -30,10 +30,10 @@ end
     init_env()
 
 Installs necessary packages to run the VQE method. Qiskit is installed into the 
-local Python environment packaged weith Julia's conda.
+local Python environment packaged weith Julia's conda. Output suppresed.
 """
 function init_env()
-    run(`$(PyCall.python) -m pip install qiskit`)
+    #redirect_stdout((()->run(`$(PyCall.python) -m pip install qiskit`)),open("/dev/null", "w"))
 end
 
 """
