@@ -1,25 +1,9 @@
-\title{QuantEx: QFT Use Case}
-\author{
-        QuantEx Team
-}
-\date{\today}
 
-\documentclass[11pt, a4paper]{article}
-\usepackage{amsmath}
-\usepackage[usenames, dvipsnames]{xcolor}
-\usepackage{listings}
-\usepackage{url}
-\usepackage[braket, qm]{qcircuit}
-
-\begin{document}
-\maketitle
-
-\begin{abstract}
+\section{QFT use-case}
 The Quantum Fourier Transform (QFT) is used as a building block in many quantum algorithms and for validation and benchmarking of circuit simulators. 
 For these reasons it makes sense to use it as a use case for QuantEx.
-\end{abstract}
 
-\section{Introduction}
+\subsection{Introduction}
 The QFT is the quantum analogue of the inverse Fourier transform. Given an input state $| \psi \rangle = \sum_{j=0}^{2^n-1} c_j | j \rangle $ defined over $n$ qubits, the 
 QFT operator F acts on $\psi\rangle$ as
 
@@ -30,7 +14,7 @@ QFT operator F acts on $\psi\rangle$ as
  $$d_j = \frac{1}{\sqrt{2^n}}\sum_{k=0}^{2^n-1} c_k e^{\frac{2\pi j}{2^n}jk}$$
 
 
-\section{Quantum circuit description and construction}
+\subsection{Quantum circuit description and construction}
 For the purposes of this use case we start with the quantum circuit defined in \cite{coppersmith_approximate_2002} to calculate the QFT of a given input state. For this implementation
  the number of gates required is quadratic in the number of qubits. While not as efficient as other known circuits \cite{hales_improved_2000,kitaev_quantum_1995}, it is a very simple 
  circuit and should serve as a starting point.
@@ -47,7 +31,7 @@ For the purposes of this use case we start with the quantum circuit defined in \
 
 Larger circuits will have the same structure just with more iterations.
  
-\section{Testing procedure}
+\subsection{Testing procedure}
 The aim of using this circuit is twofold:
 
 \begin{enumerate}
@@ -55,7 +39,7 @@ The aim of using this circuit is twofold:
 \item It can be used to benchmark simulator performance and compare to other simulator platforms
 \end{enumerate}
 
-\subsection{Validation}
+\subsubsection{Validation}
 Simulating the QFT with the default input state which initialises all qubits to state $|0\rangle$ produces an equal superposition over 
 all qubit configurations. This is not very effective for validating the correctness of the underlying simulation platform. To better test
 the simulator we prepare the initial state in a less trivial state through the use of a simple parameterised ansatz circuit. 
@@ -67,12 +51,12 @@ the simulator we prepare the initial state in a less trivial state through the u
 Validation then proceeds by measuring the amplitudes of a set of output configurations and comparing these to their expected amplitudes. For smaller circuits 
 it will be possible to do this for every possibly configuration, but for larger circuits it will be necessary to use a sample of these.
 
-\subsection{Benchmarking}
+\subsubsection{Benchmarking}
 For benchmarking, we wish to compute the time taken for running the circuit with a range of circuit sizes and on different numbers of CPUs/GPUs and nodes. From 
 these, the scaling behaviour can be characterised. It is important to be aware that if using compression techniques (to reduce the dimension of intermediate tensors) 
 the runtime of the simulation will depend not only on the number of qubits and resources used, but also on the form and parameters of the ansatz circuit.
 
-\subsection{Tasks}
+\subsubsection{Tasks}
 Sketch of the tasks envisaged to implement this use cases are as follows:
 
 \begin{enumerate}
@@ -83,9 +67,3 @@ Sketch of the tasks envisaged to implement this use cases are as follows:
 \item Ability to accurately record run time
 \item Collate timings and accuracies, plot results and document conclusions
 \end{enumerate}
-
-\bibliographystyle{habbrv}
-\bibliography{library}
-
-\end{document}
-This is never printed
