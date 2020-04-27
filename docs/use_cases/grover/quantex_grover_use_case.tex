@@ -1,16 +1,55 @@
-
 \section{Grover search use-case}
-The Grover search algorithm
+The Grover search algorithm is a fundamental quantum algorithm demonstrating the advantage offered by quantum computing methods over classical for database searching. Given an oracular means to select the required state, the method can find the required item(s) in $O(\sqrt{n})$ operations, with classical methods being $O(n)$ in the best case.
 
 \subsection{Introduction}
 General idea
 
+The oracle operator $U_o$, performs the following operation to an arbitrary state, $\vert \psi \rangle$
+\begin{align}
+U_f\vert \psi \rangle \rightarrow (-1)^{f(\psi)}  \vert \psi \rangle.
+\end{align}
+The function $f(x)$ returns 1 when $x = \psi$, and 0 otherwise, marking the required state with a phase shift. Following this, the Grover diffusion operator, $D$ is applied to the circuit. This operator causes a net transfer of amplitude from the unmarked states to the marked, and takes the form 
+\begin{align}
+D = 
+\renewcommand\arraystretch{1.5}
+\begin{bmatrix}
+-1 +\frac{2}{N} & \frac{2}{N}      & \frac{2}{N}      & \dots & \frac{2}{N}     \\
+\frac{2}{N}     & -1 +\frac{2}{N}  & \frac{2}{N}      & \dots & \frac{2}{N}     \\
+\frac{2}{N}     & \frac{2}{N}      & \ddots           &       & \vdots          \\
+\vdots          &  \vdots          &                  &       &                 \\
+\frac{2}{N}     &                  &                  &       & -1 +\frac{2}{N} \\
+\end{bmatrix}.
+\end{align}
+Through repeated application of $U_f$ and $D$ the required state is selected and amplified over the remaining states. The number of iterations required for an optimal search result (i.e. high-probability of selected state upon measurement) is given by $i\approx\pi\sqrt{N}/4$~\cite{nielsen_chuang_2010}. A more indepth explanation of the algorithm can be found here~\cite{grover_1996,Grover_2001}, with pedagogical examples given here~\cite{qiskit_grover_2020}.
 
 \subsection{Quantum circuit description and construction}
-Require methods and how it works
- 
+As discussed, to construct a Grover's search example we require two circuit components: i) an oracle operator $U_f$, and ii) a diffusion operator $D$. The general structure of the oracle operator is that of a black-box taking any required form to select the required component. The following circuit shows a 4-qubit example of such an oracle, where $U_f = \mathcal{U}_f (n\textrm{C}Z) \mathcal{U}_f^\dagger$:
+\begin{align*}\label{cct:oracle}
+\Qcircuit @C=.75em @R=0.5em @!R {
+&\vert 0 \rangle & & \gate{H} & \qw & \multigate{3}{\mathcal{U_f}} & \ctrl{1} & \multigate{3}{\mathcal{U_f}^{\dagger}} & \qw \\
+&\vert 0 \rangle & & \gate{H} & \qw & \ghost{\mathcal{U_f}} & \ctrl{1} & \ghost{\mathcal{U_f}^{\dagger}} & \qw \\
+&\vert 0 \rangle & & \gate{H} & \qw & \ghost{\mathcal{U_f}} & \ctrl{1} & \ghost{\mathcal{U_f}^{\dagger}} & \qw \\
+&\vert 0 \rangle & & \gate{H} & \qw & \ghost{\mathcal{U_f}} & \gate{Z} & \ghost{\mathcal{U_f}^{\dagger}} & \qw \gategroup{1}{6}{4}{9}{.7em}{--}\\
+}
+\end{align*}
+Starting with a ($n=4$) state of $\vert 0000 \rangle$, we create a superposition
+\begin{equation}
+\vert \psi \rangle = \frac{1}{\sqrt{n}} \displaystyle\sum\limits_{i=1}^{2^{n}} \vert i\rangle
+\end{equation}
+where the oracle circuit (dashed) is used to mark the required state pattern by applying a phase rotation relative to the other states. The operators $\mathcal{U}_f, \mathcal{U}_f^\dagger$ are used to selectively activate the controlling qubits to ensure appropriate application of the $n$-controlled $Z$ gate, and deselect following its application. Given the appropriately marked state(s), the next stage of the algorithm ``diffuses'' probability from the unmarked state to the marked. An implementation of the $D$ operator is given as the following circuit:
+\begin{align*}\label{cct:diffusion}
+\Qcircuit @C=.75em @R=0.5em @!R {
+    & \gate{H} & \gate{X} & \ctrl{1} & \gate{X} & \gate{H} & \qw \\
+    & \gate{H} & \gate{X} & \ctrl{1} & \gate{X} & \gate{H} & \qw \\
+    & \gate{H} & \gate{X} & \ctrl{1} & \gate{X} & \gate{H} & \qw \\
+    & \gate{H} & \gate{X} & \gate{Z} & \gate{X} & \gate{H} & \qw \\
+}
+\end{align*}
+For the 4-qubit example, the required number of iterations of $U_f$ and $D$ circuits to ensure an optimal solution is $\approx\sqrt{2^4}\pi/4 \approx 3$.
+
 \subsection{Testing procedure}
-Why we do this and how to test
+The above example, given an appropriately chosen bit-pattern to select (from $0$ to $2^{n-1}$), applies the appropriate number of iterations of the algorithm and measures the resulting state outcome for several repetitions of the experiment. The result with the largest number of expected outcomes is then compared with the initial selected bit-pattern, and should be equal. 
+
 
 \subsubsection{Validation}
 Discuss implemented use-case 
