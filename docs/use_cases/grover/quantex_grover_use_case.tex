@@ -49,22 +49,3 @@ For the 4-qubit example, the required number of iterations of $U_f$ and $D$ circ
 
 \subsection{Testing procedure}
 The above example, given an appropriately chosen bit-pattern to select (from $0$ to $2^{n-1}$), applies the appropriate number of iterations of the algorithm and measures the resulting state outcome for several repetitions of the experiment. The result with the largest number of expected outcomes is then compared with the initial selected bit-pattern, and should be equal. 
-
-
-\subsubsection{Validation}
-Discuss implemented use-case 
-
-\subsubsection{Benchmarking}
-Circuit depth and performance testing 
-
-\subsubsection{Tasks}
-Sketch of the tasks envisaged to implement this use cases are as follows:
-
-\begin{enumerate}
-\item Script to generate QASM for QFT circuit with a given number of qubits
-\item Script to generate QASM for ansatz circuit of given size and parameters (or to allow simulator start from arbitrary input state)
-\item Script to run simulator and calculate output amplitudes for a set of configurations
-\item Script to compare amplitudes and estimate the accuracy of the simulation
-\item Ability to accurately record run time
-\item Collate timings and accuracies, plot results and document conclusions
-\end{enumerate}
