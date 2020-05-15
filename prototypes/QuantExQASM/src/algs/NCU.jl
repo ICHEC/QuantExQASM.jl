@@ -1,63 +1,92 @@
 module NCU
-using .GateOps
+using QuantExQASM.GateOps
+using QuantExQASM.Circuit
 
-Base.:sqrt(U::Symbol) = Symbol("s"*string(U))
-Base.:adjoint(U::Symbol) = Symbol("a"*string(U))
+ops_mat_cache = Dict{GateOps.GateLabel, Matrix{<:Number}}()
 
-# Start with default gate-set
-g_map = Dict{Symbol, Matrix{<:Number}}(
-    :x=>([0 1; 1 0].+0im),
-    :y=>([0 -1im; 1im 0]),
-    :z=>([1 0; 0 -1].+0im),
-    :h=>((1/sqrt(2)).*[1 1; 1 -1].+0im)
-)
+# =========================================================================== #
+# 
+# =========================================================================== #
 
-function init_intermed_gates(num_ctrl::Union{Nothing, Int})
-    for k in [:z,:y, :x, :h]
+function init_intermed_gates(circ::Circuit.Circ, num_ctrl::Union{Nothing, Int})
+    for k in circ.gate_set
         gen_intermed_gates(num_ctrl == nothing ? 8 : num_ctrl, k)
     end
 end
 
-function register_gate(U::Symbol, gate::Matrix{<:Number})
+function register_gate(circ::Circuit.Circ, U::GateOps.GateLabel, gate::Matrix{<:Number})
     # Some characters are reserved for internal gates
-    @assert !(String(U) in ["x","y","z","h","s","t","a","c"])
-    g_map[U] = gate
+    @assert !(String(U.label) in ["x","y","z","h","s","t","a","c"])
+    Circuit.gate_cache[U] = gate
 end
 
-function gen_intermed_gates(ctrl_depth::Int, U::Symbol)
+function gen_intermed_gates(ctrl_depth::Int, U::GateOps.GateLabel)
     su,asu = get_intermed_gate(U)
     for i in 2:ctrl_depth-1
         su,asu = get_intermed_gate(su)
     end
 end
 
-function get_intermed_gate(U::Symbol)
-    su = Symbol("s" * String(U))
-    asu = Symbol("as" * String(U))
+function get_intermed_gate(U::GateOps.GateLabel)
+    su = GateOps.GateLabel( Symbol("s" * String(U.label)) )
+    asu = GateOps.GateLabel( Symbol("as" * String(U.label)) )
 
-    if haskey(g_map, su)
-        SU = g_map[su]
-        ASU = g_map[asu]
+    if haskey(Circuit.gate_cache, su)
+        SU = Circuit.gate_cache[su]
+        ASU = Circuit.gate_cache[asu]
     else
-        SU = sqrt(g_map[U])
-        ASU = collect(adjoint(sqrt(g_map[U])))
+
+        SU = sqrt(Circuit.gate_cache[U])
+        ASU = collect(adjoint(sqrt(Circuit.gate_cache[U])))
 
         # Cache the gates
-        g_map[su] = SU
-        g_map[asu] = ASU
+        Circuit.gate_cache[su] = SU
+        Circuit.gate_cache[asu] = ASU
 
         # Print the newly generated gates to qasm file for use.
         # Gates can be defined anywhere in file.
-        create_gates_nonparam(su, 1)
-        create_gates_nonparam(asu, 1)
-        create_gates_nonparam(su, 2)
-        create_gates_nonparam(asu, 2)
+
+        #GateOps.create_gates_nonparam(su, 1)
+        #GateOps.create_gates_nonparam(asu, 1)
+        #GateOps.create_gates_nonparam(su, 2)
+        #GateOps.create_gates_nonparam(asu, 2)
     end
+
     return su,asu
 end
 
+# =========================================================================== #
+# 
+# =========================================================================== #
+
+function apply_cx!(c::Circuit.Circ, ctrl, tgt, reg) 
+    Circuit.add_gatecall!(c, GateOps.c_pauli_x(ctrl, tgt, reg))
+end
+
+function apply_cu!(c::Circuit.Circ, ctrl, tgt, reg, gl::GateOps.GateLabel)
+    if String(gl.label)[end] == 'x'
+        glz_s = String(gl.label)[1:end-1] * 'z'
+        gl_z = GateOps.GateLabel(Symbol(glz_s))
+
+        push!(c.gate_set, gl_z)
+
+        Circuit.add_gatecall!(c, GateOps.hadamard(tgt, reg))
+        Circuit.add_gatecall!(c, GateOps.c_u(gl_z, ctrl, tgt, GateOps.u( GateOps.GateLabel(Symbol(split(glz_s, "c_")[end])), tgt, reg), reg))
+        Circuit.add_gatecall!(c, GateOps.hadamard(tgt, reg))
+
+    elseif String(gl.label)[end] == 'z'
+        Circuit.add_gatecall!(c, GateOps.c_u(gl, ctrl, tgt, GateOps.pauli_z(tgt, reg), reg))
+    else
+        error("Currently only PauliX and PauliZ decomposed gates supported")
+    end
+end
+
+# =========================================================================== #
+# 
+# =========================================================================== #
+
 """
-    apply_ncu(ctrls::Vector{Int}, aux::Vector{Int}, tgt::Int, U::Symbol)
+    apply_ncu(ctrls::Vector{Int}, aux::Vector{Int}, tgt::Int, U::GateOps.GateLabel)
 
 Apply an n-qubit controlled gate operation on the given target qubit.
 Ensure the gate corresponding with symbol U is registered with g_map before use.
@@ -68,69 +97,180 @@ Ensure the gate corresponding with symbol U is registered with g_map before use.
 - `tgt::Int`:
 - `U::Symbol`:
 """
-function apply_ncu(q_ctrl::Vector, q_aux::Vector, q_tgt, U::Symbol)
+function apply_ncu(q_ctrl::Vector, q_aux::Vector, q_tgt, U::GateOps.GateLabel)
+    cct = Circuit.Circ()
 
-    if ~haskey(g_map, U)
+    # Check global circuit cache for gate
+    if ~haskey(Circuit.gate_cache, U )
         error("Gate $(U) does not exist")
     end
 
     su,asu = get_intermed_gate(U)
 
     if length(q_ctrl) == 2
-        apply_cu(q_ctrl[2], q_tgt, su)
-        apply_cx(q_ctrl[1], q_ctrl[2])
-        apply_cu(q_ctrl[2], q_tgt, asu)
-        apply_cx(q_ctrl[1], q_ctrl[2])
-        apply_cu(q_ctrl[1], q_tgt, su)
+#=
+        cct.add_gatecall( GateOps.c_u(su, q_tgt, q_ctrl[2]) )
+        cct.add_gatecall( GateOps.c_pauli_x(q_ctrl[2], q_ctrl[1]) )
+        cct.add_gatecall( GateOps.c_u(asu, q_tgt, q_ctrl[2]) )
+        cct.add_gatecall( GateOps.c_pauli_x(q_ctrl[2], q_ctrl[1]) )
+        cct.add_gatecall( GateOps.c_u(su, q_tgt, q_ctrl[1]) )
+=#
+
+        apply_cu!(cct, q_ctrl[2], q_tgt, nothing, su)
+        apply_cx!(cct, q_ctrl[1], q_ctrl[2], nothing)
+        apply_cu!(cct, q_ctrl[2], q_tgt,  nothing, asu)
+        apply_cx!(cct, q_ctrl[1], q_ctrl[2], nothing)
+        apply_cu!(cct, q_ctrl[1], q_tgt,  nothing, su)
 
     elseif length(q_ctrl) == 3
         #ssu = sqrt(su)
         #assu = adjoint(ssu)
         ssu,assu = get_intermed_gate(su)
-
-        apply_cu(q_ctrl[1], q_tgt, ssu)
-        apply_cx(q_ctrl[1], q_ctrl[2])
-        apply_cu(q_ctrl[2], q_tgt, assu)
-        apply_cx(q_ctrl[1], q_ctrl[2])
-        apply_cu(q_ctrl[2], q_tgt, ssu)
-        apply_cx(q_ctrl[2], q_ctrl[3])
-        apply_cu(q_ctrl[3], q_tgt, assu)
-        apply_cx(q_ctrl[1], q_ctrl[3])
-        apply_cu(q_ctrl[3], q_tgt, ssu)
-        apply_cx(q_ctrl[2], q_ctrl[3])
-        apply_cu(q_ctrl[3], q_tgt, assu)
-        apply_cx(q_ctrl[1], q_ctrl[3])
-        apply_cu(q_ctrl[3], q_tgt, ssu)
-
-    elseif (length(q_ctrl)>=5) && (length(q_aux)>=length(q_ctrl)-2) && (U == :x)
-        apply_ncu([q_ctrl[end], q_aux[ 1 + length(q_ctrl)-3 ]], Int[], q_tgt, U) 
+#=
+        Circuit.add_gatecall!(cct, GateOps.c_u(ssu, q_tgt, q_ctrl[1]) )
+        Circuit.add_gatecall!(cct, GateOps.c_pauli_x(q_ctrl[2], q_ctrl[1]) )
+        Circuit.add_gatecall!(cct, GateOps.c_u(assu, q_tgt, q_ctrl[2]) )
+        Circuit.add_gatecall!(cct, GateOps.c_pauli_x(q_ctrl[2], q_ctrl[1]) )
+        Circuit.add_gatecall!(cct, GateOps.c_u(ssu, q_tgt, q_ctrl[2]) )
+        Circuit.add_gatecall!(cct, GateOps.c_pauli_x(q_ctrl[3], q_ctrl[2]) )
+        Circuit.add_gatecall!(cct, GateOps.c_u(assu, q_tgt, q_ctrl[3]) )
+        Circuit.add_gatecall!(cct, GateOps.c_pauli_x(q_ctrl[3], q_ctrl[1]) )
+        Circuit.add_gatecall!(cct, GateOps.c_u(ssu, q_tgt, q_ctrl[3]) )
+        Circuit.add_gatecall!(cct, GateOps.c_pauli_x(q_ctrl[3], q_ctrl[2]) )
+        Circuit.add_gatecall!(cct, GateOps.c_u(assu, q_tgt, q_ctrl[3]) )
+        Circuit.add_gatecall!(cct, GateOps.c_pauli_x(q_ctrl[3], q_ctrl[1]) )
+        Circuit.add_gatecall!(cct, GateOps.c_u(ssu, q_tgt, q_ctrl[3]) )
+=#
+        apply_cu!(cct, q_ctrl[1], q_tgt, nothing, ssu)
+        apply_cx!(cct, q_ctrl[1], q_ctrl[2], nothing)
+        apply_cu!(cct, q_ctrl[2], q_tgt, nothing, assu)
+        apply_cx!(cct, q_ctrl[1], q_ctrl[2], nothing)
+        apply_cu!(cct, q_ctrl[2], q_tgt, nothing, ssu)
+        apply_cx!(cct, q_ctrl[2], q_ctrl[3], nothing)
+        apply_cu!(cct, q_ctrl[3], q_tgt, nothing, assu)
+        apply_cx!(cct ,q_ctrl[1], q_ctrl[3], nothing)
+        apply_cu!(cct, q_ctrl[3], q_tgt, nothing, ssu)
+        apply_cx!(cct, q_ctrl[2], q_ctrl[3], nothing)
+        apply_cu!(cct, q_ctrl[3], q_tgt, nothing, assu)
+        apply_cx!(cct, q_ctrl[1], q_ctrl[3], nothing)
+        apply_cu!(cct, q_ctrl[3], q_tgt, nothing, ssu)
+        
+    elseif (length(q_ctrl)>=5) && (length(q_aux)>=length(q_ctrl)-2) && (U == GateOps.GateLabel(:x))
+        append!(cct, apply_ncu([q_ctrl[end], q_aux[ 1 + length(q_ctrl)-3 ]], Int[], q_tgt, U) )
+        
         for i in reverse(2:length(q_ctrl)-2)
-            apply_ncu([q_ctrl[1 + i], q_aux[1 + (i-2)]], Int[], q_aux[1 + (i-1)], U)
+            append!(cct, apply_ncu([q_ctrl[1 + i], q_aux[1 + (i-2)]], Int[], q_aux[1 + (i-1)], U) )
         end
         
-        apply_ncu([q_ctrl[1], q_ctrl[2]], Int[], q_aux[1], U)
+        append!(cct, apply_ncu([q_ctrl[1], q_ctrl[2]], Int[], q_aux[1], U) )
         for i in 2:length(q_ctrl)-2
-            apply_ncu([q_ctrl[1 + i], q_aux[1 + (i-2)]], Int[], q_aux[1 + (i-1)], U)
+            append!(cct, apply_ncu([q_ctrl[1 + i], q_aux[1 + (i-2)]], Int[], q_aux[1 + (i-1)], U) )
         end
         
-        apply_ncu([q_ctrl[end], q_aux[1 + length(q_ctrl) - 3]], Int[], q_tgt, U)
+        append!(cct, apply_ncu([q_ctrl[end], q_aux[1 + length(q_ctrl) - 3]], Int[], q_tgt, U) )
         for i in reverse(2:length(q_ctrl)-2)
-            apply_ncu([q_ctrl[1 + i], q_aux[1 + (i-2)]], Int[], q_aux[1 + (i-1)], U)
+            append!(cct, apply_ncu([q_ctrl[1 + i], q_aux[1 + (i-2)]], Int[], q_aux[1 + (i-1)], U) )
         end
         
-        apply_ncu([q_ctrl[1], q_ctrl[2]], Int[], q_aux[1], U)
+        append!(cct, apply_ncu([q_ctrl[1], q_ctrl[2]], Int[], q_aux[1], U) )
         for i in 2:length(q_ctrl)-2
-            apply_ncu([q_ctrl[1 + i], q_aux[1 + (i-2)]], Int[], q_aux[1 + (i-1)], U)
+            append!(cct, apply_ncu([q_ctrl[1 + i], q_aux[1 + (i-2)]], Int[], q_aux[1 + (i-1)], U) )
         end
 
     else
-        apply_cu(q_ctrl[end], q_tgt, su)
-        apply_ncu(q_ctrl[1:end-1], q_aux, q_ctrl[end], :x)
-        apply_cu(q_ctrl[end], q_tgt, asu)
-        apply_ncu(q_ctrl[1:end-1], q_aux, q_ctrl[end], :x)
-        apply_ncu(q_ctrl[1:end-1], q_aux, q_tgt, su)
+#=
+        Circuit.add_gatecall!(cct, GateOps.c_u(su, q_tgt, q_ctrl[end]) )
+        append!(cct, apply_ncu(q_ctrl[1:end-1], q_aux, q_ctrl[end], GateOps.GateLabel(:x)) )
+        Circuit.add_gatecall!(cct, GateOps.c_u(asu, q_tgt, q_ctrl[end]) )
+        append!(cct, apply_ncu(q_ctrl[1:end-1], q_aux, q_ctrl[end], GateOps.GateLabel(:x)) )
+        append!(cct, apply_ncu(q_ctrl[1:end-1], q_aux, q_tgt, su) )
+=#
+        apply_cu!(cct, q_ctrl[end], q_tgt, nothing, su)
+        append!(cct, apply_ncu(q_ctrl[1:end-1], q_aux, q_ctrl[end], GateOps.GateLabel(:x)) )
+        apply_cu!(cct, q_ctrl[end], q_tgt, nothing, asu)
+        append!(cct, apply_ncu(q_ctrl[1:end-1], q_aux, q_ctrl[end], GateOps.GateLabel(:x)) )
+        append!(cct, apply_ncu(q_ctrl[1:end-1], q_aux, q_tgt, su) )
+
     end
 
+    return cct
+
 end
+
+# =========================================================================== #
+# 
+# =========================================================================== #
+
+function apply_ncu!(circuit::Circuit.Circ, q_ctrl::Vector, q_aux::Vector, q_tgt, U::GateOps.GateLabel)
+
+    # Check global circuit cache for gate
+    if ~haskey(Circuit.gate_cache, U )
+        error("Gate $(U) does not exist")
+    end
+
+    su,asu = get_intermed_gate(U)
+    push!(circuit.gate_set, su)
+    push!(circuit.gate_set, asu)
+
+    if length(q_ctrl) == 2
+        apply_cu!(circuit, q_ctrl[2], q_tgt, nothing, su)
+        apply_cx!(circuit, q_ctrl[1], q_ctrl[2], nothing)
+        apply_cu!(circuit, q_ctrl[2], q_tgt,  nothing, asu)
+        apply_cx!(circuit, q_ctrl[1], q_ctrl[2], nothing)
+        apply_cu!(circuit, q_ctrl[1], q_tgt,  nothing, su)
+
+    elseif length(q_ctrl) == 3
+        ssu,assu = get_intermed_gate(su)
+        push!(circuit.gate_set, ssu)
+        push!(circuit.gate_set, assu)
+
+        apply_cu!(circuit, q_ctrl[1], q_tgt, nothing, ssu)
+        apply_cx!(circuit, q_ctrl[1], q_ctrl[2], nothing)
+        apply_cu!(circuit, q_ctrl[2], q_tgt, nothing, assu)
+        apply_cx!(circuit, q_ctrl[1], q_ctrl[2], nothing)
+        apply_cu!(circuit, q_ctrl[2], q_tgt, nothing, ssu)
+        apply_cx!(circuit, q_ctrl[2], q_ctrl[3], nothing)
+        apply_cu!(circuit, q_ctrl[3], q_tgt, nothing, assu)
+        apply_cx!(circuit ,q_ctrl[1], q_ctrl[3], nothing)
+        apply_cu!(circuit, q_ctrl[3], q_tgt, nothing, ssu)
+        apply_cx!(circuit, q_ctrl[2], q_ctrl[3], nothing)
+        apply_cu!(circuit, q_ctrl[3], q_tgt, nothing, assu)
+        apply_cx!(circuit, q_ctrl[1], q_ctrl[3], nothing)
+        apply_cu!(circuit, q_ctrl[3], q_tgt, nothing, ssu)
+        
+    elseif (length(q_ctrl)>=5) && (length(q_aux)>=length(q_ctrl)-2) && (U == GateOps.GateLabel(:x))
+        apply_ncu!(circuit, [q_ctrl[end], q_aux[ 1 + length(q_ctrl)-3 ]], Int[], q_tgt, U)
+        for i in reverse(2:length(q_ctrl)-2)
+            apply_ncu!(circuit, [q_ctrl[1 + i], q_aux[1 + (i-2)]], Int[], q_aux[1 + (i-1)], U)
+        end
+        
+        apply_ncu!(circuit, [q_ctrl[1], q_ctrl[2]], Int[], q_aux[1], U)
+        for i in 2:length(q_ctrl)-2
+            apply_ncu!(circuit, [q_ctrl[1 + i], q_aux[1 + (i-2)]], Int[], q_aux[1 + (i-1)], U)
+        end
+        
+        apply_ncu!(circuit, [q_ctrl[end], q_aux[1 + length(q_ctrl) - 3]], Int[], q_tgt, U)
+        for i in reverse(2:length(q_ctrl)-2)
+            apply_ncu!(circuit, [q_ctrl[1 + i], q_aux[1 + (i-2)]], Int[], q_aux[1 + (i-1)], U)
+        end
+        
+        apply_ncu!(circuit, [q_ctrl[1], q_ctrl[2]], Int[], q_aux[1], U)
+        for i in 2:length(q_ctrl)-2
+            apply_ncu!(circuit, [q_ctrl[1 + i], q_aux[1 + (i-2)]], Int[], q_aux[1 + (i-1)], U)
+        end
+    else
+        apply_cu!(circuit, q_ctrl[end], q_tgt, nothing, su)
+        apply_ncu!(circuit, q_ctrl[1:end-1], q_aux, q_ctrl[end], GateOps.GateLabel(:x))
+        apply_cu!(circuit, q_ctrl[end], q_tgt, nothing, asu)
+        apply_ncu!(circuit, q_ctrl[1:end-1], q_aux, q_ctrl[end], GateOps.GateLabel(:x))
+        apply_ncu!(circuit, q_ctrl[1:end-1], q_aux, q_tgt, su)
+
+    end
+
+    return circuit
+
+end
+
+
 
 end

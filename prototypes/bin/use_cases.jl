@@ -24,48 +24,39 @@ using PyCall
 # *************************************************************************** #
 
 """
-    function create_grover_circuit(qubits::Integer)
+    function create_grover_circuit(qubits::Integer, bit_pattern::Int=11)
 """
-function create_grover_circuit(num_qubits::Int)
-
-    qubit_indices = collect(0:num_qubits-1)
-    cl_indices = qubit_indices # Measure all
-
-    q_reg_label = "qu"
-    c_reg_label = "cl"
-
-    marked_state = 5
-
-    # Create Grover operation 
-    cct = QuantExQASM.GateOps.gen_qasm_header(num_qubits, length(cl_indices), q_reg_label, c_reg_label)
-    cct *= QuantExQASM.Grover.run_grover(q_reg_label, qubit_indices, marked_state)
-    cct *= QuantExQASM.GateOps.measure_qubits_all(qubit_indices, cl_indices, q_reg_label, c_reg_label)
-    return PicoQuant.load_qasm_as_circuit(cct)
+function create_grover_circuit(num_qubits::Int, bit_pattern::Int=11)
+    # Create empty circuit with qiven qubit count
+    cct = QuantExQASM.Circuit.Circ(num_qubits)
+    # Initialise intermediate gates for use in NCU
+    QuantExQASM.NCU.init_intermed_gates(cct, num_qubits-1)
+    # Run Grover algorithm for given oracle bit-pattern
+    QuantExQASM.Grover.run_grover!(cct, collect(0:num_qubits-1), bit_pattern)
+    # Convert circuit to QASM populated buffer
+    cct_s = QuantExQASM.Circuit.to_qasm(cct, true)
+    # Convert to Qiskit loaded qasm circuit
+    return PicoQuant.load_qasm_as_circuit( String(cct_s) )
 end
+
 
 # *************************************************************************** #
 
 """
-    function create_phase_oracle_circuit(qubits::Integer)
+    function create_phase_oracle_circuit(qubits::Integer, bit_pattern::Int=11)
 """
-function create_phase_oracle_circuit(num_qubits::Int)
-
-    qubit_indices = collect(0:num_qubits-1)
-    cl_indices = qubit_indices # Measure all
-
-    q_reg_label = "qu"
-    c_reg_label = "cl"
-
-    marked_state = 1
-
-    # Create Grover operation 
-    cct = QuantExQASM.GateOps.gen_qasm_header(num_qubits, length(cl_indices), q_reg_label, c_reg_label)
-    cct *= QuantExQASM.Oracle.bitstring_phase_oracle(q_reg_label, marked_state, qubit_indices[1:end-1], qubit_indices[end])
-    cct *= QuantExQASM.GateOps.measure_qubits_all(qubit_indices, cl_indices, q_reg_label, c_reg_label)
-    
-    return PicoQuant.load_qasm_as_circuit(cct)
+function create_phase_oracle_circuit(num_qubits::Int, bit_pattern::Int=11)
+    # Create empty circuit with qiven qubit count
+    cct = QuantExQASM.Circuit.Circ(num_qubits)
+    # Initialise intermediate gates for use in NCU
+    QuantExQASM.NCU.init_intermed_gates(cct, num_qubits-1)
+    # Run Grover algorithm for given oracle bit-pattern
+    QuantExQASM.Oracle.bitstring_phase_oracle!(cct, bit_pattern, collect(0:num_qubits-2), num_qubits-1)
+    # Convert circuit to QASM populated buffer
+    cct_s = QuantExQASM.Circuit.to_qasm(cct, true)
+    # Convert to Qiskit loaded qasm circuit
+    return PicoQuant.load_qasm_as_circuit( String(cct_s) )
 end
-
 # *************************************************************************** #
 
 """
@@ -75,35 +66,40 @@ Generate n-controlled unitary circuit acting on given number of qubits.
 
 Defaults to |11...110> register, and applies nCX to generate |11..111>
 """
-function create_ncu_circuit(num_qubits::Int)
 
-    X = QuantExQASM.NCU.GateOps.default_gates["X"]
+function create_ncu_circuit(num_qubits::Int, gl::QuantExQASM.GateOps.GateLabel=QuantExQASM.GateOps.GateLabel(:x), use_aux_qubits::Bool=true)
 
-    use_aux_qubits = true
+    # Create empty circuit with qiven qubit count
+    cct = QuantExQASM.Circuit.Circ(num_qubits)
 
-    if use_aux_qubits == true
-        ctrl = collect(0:num_qubits-2)
+    # Initialise default intermediate gates for use in NCU
+    QuantExQASM.NCU.init_intermed_gates(cct, num_qubits-1)
+    
+    U = QuantExQASM.Circuit.gate_cache[gl]
+
+    if use_aux_qubits == true && (num_qubits/2+1 >= 4)
+        ctrl = collect(0:Int( floor((num_qubits-1)//2) ))
+        aux = collect(1 + Int( floor((num_qubits-1)//2)):num_qubits-2)
         tgt = num_qubits-1
-        aux = collect( num_qubits: num_qubits + length(ctrl) - 3)
     else
         ctrl = collect(0:num_qubits-2)
-        aux = Array
-        tgt = length(ctrl)
+        aux = Int[]
+        tgt = num_qubits-1
     end
 
-    num_classical = num_qubits # Measure only the target line
-    q_reg_label = "qu"
-    c_reg_label = "cl"
-
-    # Create NCU operation 
-    cct = QuantExQASM.GateOps.gen_qasm_header(2*num_qubits-3, num_classical, q_reg_label, c_reg_label)
     for i in ctrl
-        cct *= QuantExQASM.GateOps.apply_gate_x(q_reg_label, i)
+        QuantExQASM.Circuit.add_gatecall!(cct, QuantExQASM.GateOps.pauli_x(i) )
     end
-    cct *= QuantExQASM.NCU.apply_ncu(q_reg_label, ctrl, aux, tgt, X, 0)
-    cct *= QuantExQASM.GateOps.measure_qubits_all(vcat(ctrl,tgt), vcat(ctrl,tgt), q_reg_label, c_reg_label)
-    return PicoQuant.load_qasm_as_circuit(cct)
+
+    QuantExQASM.NCU.apply_ncu!(cct, ctrl, aux, tgt, gl);
+
+    # Convert circuit to QASM populated buffer
+    QuantExQASM.Circuit.to_qasm(cct, true, "out.qasm")
+    cct_s = QuantExQASM.Circuit.to_qasm(cct, true)
+    #cct *= QuantExQASM.GateOps.measure_qubits_all(vcat(ctrl,tgt), vcat(ctrl,tgt), q_reg_label, c_reg_label)
+    return PicoQuant.load_qasm_as_circuit( String(cct_s) )
 end
+
 
 # *************************************************************************** #
 

@@ -1,9 +1,11 @@
 module Oracle
 
-import .NCU
+using QuantExQASM.GateOps
+using QuantExQASM.NCU
+using QuantExQASM.Circuit
 
-function apply_x(q_tgt)
-    println("x $(q_tgt);")
+function apply_x!(c::Circuit.Circ, tgt, reg::Union{String, Nothing}=nothing) 
+    Circuit.add_gatecall!(c, GateOps.pauli_x(tgt, reg))
 end
 
 """
@@ -11,7 +13,7 @@ end
 
 Takes bitstring as the binary pattern and indices as the qubits to operate upon. Applies the appropriate PauliX gates to the control lines to call the NCU with the given matrix 
 """
-function bitstring_ncu(bitstring::Integer, ctrl_indices::Vector, tgt_idx, U::Symbol)
+function bitstring_ncu(cct::Circuit.Circ, bitstring::Integer, ctrl_indices::Vector, tgt_idx, U::GateOps.GateLabel)
     bitmask =  0x1
     aux_idx = typeof(ctrl_indices)()
 
@@ -19,19 +21,19 @@ function bitstring_ncu(bitstring::Integer, ctrl_indices::Vector, tgt_idx, U::Sym
     for idx in collect(0:length(ctrl_indices))
         if ~( (bitstring & (bitmask << idx) ) != 0)
             if idx < length(ctrl_indices)
-                apply_x(ctrl_indices[idx+1])
+                apply_x!(cct, ctrl_indices[idx+1])
             else
-                apply_x(tgt_idx)
+                apply_x!(cct, tgt_idx)
             end
         end
     end
-    NCU.apply_ncu(ctrl_indices, aux_idx, tgt_idx, U)
+    NCU.apply_ncu!(cct, ctrl_indices, aux_idx, tgt_idx, U)
     for idx in collect(0:length(ctrl_indices))
         if ~( (bitstring & (bitmask << idx) ) != 0)
             if idx < length(ctrl_indices)
-                apply_x(ctrl_indices[idx+1])
+                apply_x!(cct, ctrl_indices[idx+1])
             else
-                apply_x(tgt_idx)
+                apply_x!(cct, tgt_idx)
             end
         end
     end
@@ -42,8 +44,8 @@ end
 
 Applies PauliX gates to the appropriate lines in the circuit, then applies a n-controlled PauliZ to mark the state.
 """
-function bitstring_phase_oracle(bitstring::Integer, ctrl_indices::Vector, tgt_idx)
-    return bitstring_ncu(bitstring, ctrl_indices, tgt_idx, :z )
+function bitstring_phase_oracle(cct::Circuit.Circ, bitstring::Integer, ctrl_indices::Vector, tgt_idx)
+    return bitstring_ncu(cct, bitstring, ctrl_indices, tgt_idx, GateOps.GateLabel(:z) )
 end
 
 end

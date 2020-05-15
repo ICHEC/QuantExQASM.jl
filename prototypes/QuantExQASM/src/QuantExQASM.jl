@@ -28,23 +28,30 @@ module QuantExQASM
 using Reexport
 
 include("GateOps.jl")
-@reexport using .GateOps
-include("QFT.jl")
-@reexport using .QFT
-include("Utils.jl")
-@reexport using .Utils
-include("VQE.jl")
-@reexport using .VQE
+include("CircuitList.jl")
+include("Circuit.jl")
+include("algs/NCU.jl")
+include("algs/Oracle.jl")
+include("algs/Diffusion.jl")
+include("algs/Grover.jl")
 
-include("Decomposition.jl")
-@reexport using .Decomposition
-include("NCU.jl")
-@reexport using .NCU
+#@reexport using .GateOps
+#include("algs/QFT.jl")
+#@reexport using .QFT
+#include("Utils.jl")
+#@reexport using .Utils
+#include("VQE.jl")
+#@reexport using .VQE
 
-include("Oracle.jl")
-@reexport using .Oracle
-include("Diffusion.jl")
-@reexport using .Diffusion
-include("Grover.jl")
+#include("algs/Decomposition.jl")
+#@reexport using .Decomposition
+#include("algs/NCU.jl")
+#@reexport using .NCU
+
+#include("algs/Oracle.jl")
+#@reexport using .Oracle
+#include("algs/Diffusion.jl")
+#@reexport using .Diffusion
+#include("algs/Grover.jl")
 
 end 

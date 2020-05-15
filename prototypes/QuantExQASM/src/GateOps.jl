@@ -1,362 +1,442 @@
 module GateOps
 
 export GateOps
-include("QASM_Map.jl")
+export pauli_x, pauli_y, pauli_z, hadamard, u
+export r_x, r_y, r_z, r_phase, swap
+export c_pauli_x, c_pauli_y, c_pauli_z, c_u
+export c_r_x, c_r_y, c_r_z, c_r_phase
 
-export bloch_angles, generate_gate, pi_convert
-export apply_gate_u, apply_gate_x, apply_gate_y, apply_gate_z, apply_gate_h
-export apply_gate_cx, apply_gate_cy, apply_gate_cz, apply_gate_cphase, apply_gate_ccx
-export apply_gate_rx, apply_gate_ry, apply_gate_rz, apply_gate_s, apply_gate_t, apply_swap
- 
-#Define map of OpenQASM structures for use in generation of appropriate structures
-qasm_map = define_qasm_mapping()
+using LinearAlgebra
+using Memoize
 
-struct bloch_angles
-    θ::Real
-    ϕ::Real
-    λ::Real
-    g_phase::Real
-    bloch_angles(θ,ϕ,λ) = new(θ,ϕ,λ,0.0)
-    bloch_angles(θ,ϕ,λ,g_phase) = new(θ,ϕ,λ,g_phase)
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
+#                       Redirect I/O streams
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
+#(rd, wr) = redirect_stdout();
+
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
+
+
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
+#                       Lightweight gate calls
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
+
+abstract type AGate end
+abstract type AGateCall <: AGate end
+abstract type AGateLabel <: AGate end
+
+struct GateLabelP{IType<:Integer, NType<:Number} <: AGateLabel
+    label::Symbol
+    params::Union{Nothing, Dict{String, Union{IType, NType, Bool}}}
+    GateLabelP{IType,NType}(gate_label) where {IType<:Integer, NType<:Number} = new(gate_label, nothing)
+    GateLabelP{IType,NType}(gate_label, params) where {IType<:Integer, NType<:Number} = new(gate_label, params)
 end
 
-struct Gate
-    angles::bloch_angles
+struct GateCall1P{IType<:Integer, NType<:Number} <: AGateCall
+    gate_label::GateLabelP{IType, NType}
+    target::IType
+    reg::Union{String, Nothing}
+    GateCall1P{IType,NType}(gate_label, target, reg) where {IType<:Integer, NType<:Number} = new(gate_label, target, reg)
+    GateCall1P{IType,NType}(gate_label, target) where {IType<:Integer, NType<:Number} = new(gate_label, target, nothing)
+end
+
+struct GateCall2P{IType<:Integer, NType<:Number} <: AGateCall
+    gate_label::GateLabelP{IType, NType}
+    ctrl::IType
+    target::IType
+    base_gate::Union{GateCall1P{IType, NType}, GateCall2P{IType, NType}, Nothing}
+    #base_gate::Union{GateLabelP{IType, NType}, Nothing}
+    reg::Union{String, Nothing}
+    GateCall2P{IType,NType}(gate_label, ctrl, target, base_gate, reg) where {IType<:Integer, NType<:Number} = 
+    new(gate_label, ctrl, target, base_gate, reg)
+
+
+    GateCall2P{IType,NType}(gate_label, ctrl, target, base_gate) where {IType<:Integer, NType<:Number} = 
+    new(gate_label, ctrl, target, base_gate, nothing)
+
+
+    GateCall2P{IType,NType}(gate_label, ctrl, target) where {IType<:Integer, NType<:Number} = 
+    new(gate_label, ctrl, target, nothing, nothing)
+end
+
+struct GateCallNP{IType<:Integer, NType<:Number} <: AGateCall
+    gate_label::GateLabelP{IType, NType}
+    ctrl::Vector{IType}
+    target::IType
+    base_gate::GateCall1P{IType, NType}
+    reg::Union{String,Nothing}
+    GateCallNP{IType,NType}(gate_label, ctrl, target, base_gate, reg) where {IType<:Integer, NType<:Number} = new(gate_label, ctrl, target, base_gate{IType,NType}, reg)
+    GateCallNP{IType,NType}(gate_label, ctrl, target, base_gate) where {IType<:Integer, NType<:Number} = new(gate_label, ctrl, target, base_gate{IType,NType}, "")
+end
+
+# Useful aliases
+GateLabel = GateLabelP{Int64, Float64}
+GateCall1 = GateCall1P{Int64, Float64}
+GateCall2 = GateCall2P{Int64, Float64}
+GateCallN = GateCallNP{Int64, Float64}
+
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
+#                           Gate implementations
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
+
+struct Gate <: AGateCall
     mat::Matrix{<:Number}
-    label::String
-    Gate(angles, mat, label) = new(angles,mat,label)
+    Gate(mat) = new(mat)
 end
 
-const default_gates = Dict(
-    "X"=>Gate( bloch_angles(pi, 0, pi), [[0 1];[1 0]], "X" ),
-    "Y"=>Gate( bloch_angles(pi, pi/2, pi/2), [[0 -1im];[1im 0]], "Y" ),
-    "Z"=>Gate( bloch_angles(0, 0, pi), [[1 0];[0 -1]], "Z" ),
-    "I"=>Gate( bloch_angles(0, 0, 0), [[1 0];[0 1]], "I" ),
-    "H"=>Gate( bloch_angles(pi/2, 0, pi), [[1 1];[1 -1]].*(1/sqrt(2)), "H" ),
-)
-
-"""
-    generate_gate(gate_name)
-
-Generates an OpenQASM-style gate structure string.
-The internals of {} can be replace with the appropriate
-values.
-
-# Examples
-```julia-repl
-julia> generate_gate("Q")
-\"gate Q {}\"
-```
-"""
-function generate_gate(gate_name::String)
-   return "gate " * gate_name * " {}" 
-end
-
-"""
-    pi_convert(value::Real)
-
-Converts the Julia internal Irrational pi string to the string pi, or the value.
-Prevents pi string being replaced by π = 3.1415926535897..., as pi is defined
-in OpenQASM.
-
-# Examples
-```julia-repl
-julia> pi
-\"π = 3.1415926535897...\"
-```
-```julia-repl
-julia> pi_convert(pi)
-\"pi\"
-```
-```julia-repl
-julia> pi_convert(pi/2)
-\"1.5707963267948966\"
-```
-"""
-function pi_convert(value::Real)
-    return typeof(value)<:Irrational{:π} ? "pi" : value
-end
-
-"""
-    apply_gate_u(angles::bloch_angles, q_reg::String, q_idx::Union{Int, Nothing}=nothing)
-
-Generates the OpenQASM syntax for a U(theta,phi,lambda) unitary as per the OpenQASM specification
-"""
-function apply_gate_u(angles::bloch_angles, q_reg::String, q_idx::Union{Int, Nothing}=nothing)
-   
-    result = replace(qasm_map["U"], "theta"=>pi_convert(angles.θ))
-    result = replace(result, "phi"=>pi_convert(angles.ϕ))
-    result = replace(result, "lambda"=>pi_convert(angles.λ))
-    result = replace(result, "q_reg"=>q_reg)
-    
-    #If no index given, apply same ops across entire register
-    if q_idx == nothing 
-        result = replace(result, "[q_idx]"=>"")
-    else # Otherwise apply op to given qubit index
-        result = replace(result, "q_idx"=>q_idx)
+struct GateEulerP{NType<:Number} <: AGateCall
+    θ::NType
+    ϕ::NType
+    λ::NType
+    phase::NType
+    GateEulerP{NType}(θ, ϕ, λ) where {NType<:Number} = new(θ, ϕ, λ, 0.0)
+    GateEulerP{NType}(θ, ϕ, λ, phase) where {NType<:Number} = new(θ, ϕ, λ, phase)
+    function GateEulerP{NType}(params::Dict{String,NType}) where {NType<:Number}
+        θ, ϕ, λ, phase = params["θ"], params["ϕ"], params["λ"], params["phase"]
+        return GateEulerP{NType}(θ, ϕ, λ, phase)
     end
-
-    # If there is a non-zero phase, apply that also
-    if ~isapprox(angles.g_phase, 0.0, atol=1e-5)
-        @debug "NON ZERO PHASE=$(angles.g_phase) func=apply_gate_u"
-        result *= apply_gate_phaseshift(q_reg, angles.g_phase, q_idx)
-    end
-
-    return result
 end
+GateEuler = GateEulerP{Float64}
 
 
-"""
-    apply_gate_x(q_reg::String, q_idx::Union{Int, Nothing}=nothing)
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
+#                            1Q Gate calls ops
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
 
-    Apply Pauli-X to qubit `q_idx` in register `q_reg`.
-"""
-function apply_gate_x(q_reg::String, q_idx::Union{Int, Nothing}=nothing)
-    return apply_gate_u( default_gates["X"].angles, q_reg, q_idx)
-end
-"""
-    apply_gate_y(q_reg::String, q_idx::Union{Int, Nothing}=nothing)
-
-    Apply Pauli-Y to qubit `q_idx` in register `q_reg`.
-"""
-function apply_gate_y(q_reg::String, q_idx::Union{Int, Nothing}=nothing)
-    return apply_gate_u( default_gates["Y"].angles, q_reg, q_idx)
-end
-"""
-    apply_gate_z(q_reg::String, q_idx::Union{Int, Nothing}=nothing)
-
-    Apply Pauli-Z to qubit `q_idx` in register `q_reg`.
-"""
-function apply_gate_z(q_reg::String, q_idx::Union{Int, Nothing}=nothing)
-    return apply_gate_u( default_gates["Z"].angles, q_reg, q_idx)
-end
-"""
-    apply_gate_h(q_reg::String, q_idx::Union{Int, Nothing}=nothing)
-
-    Apply Hadamard to qubit `q_idx` in register `q_reg`.
-"""
-function apply_gate_h(q_reg::String, q_idx::Union{Int, Nothing}=nothing)
-    return apply_gate_u( default_gates["H"].angles, q_reg, q_idx)
-end
-
-"""
-    apply_gate_t(q_reg::String, q_idx::Union{Int, Nothing}=nothing)
-
-    Apply T gate to qubit `q_idx` in register `q_reg`. If `is_adjoint==true`, applies T^{dagger}
-"""
-function apply_gate_t(q_reg::String, q_idx::Union{Int, Nothing}=nothing, is_adjoint::Union{Bool, Nothing}=nothing)
-    #If no index given, apply same ops across entire register
-    if is_adjoint == nothing || is_adjoint == false
-        result = qasm_map["T"]
+function pauli_x(q_target::Int, register::Union{String, Nothing}=nothing)
+    if register == nothing
+        return GateCall1(GateLabel(:x), q_target)
     else
-        result = qasm_map["TDG"]
-    end        
-    
-    result = replace(result, "q_reg"=>q_reg)
-    
-    if q_idx == nothing
-        result = replace(result, "[q_idx]"=>"")
-    else # Otherwise apply op to given qubit index
-        result = replace(result, "q_idx"=>q_idx)
+        return GateCall1(GateLabel(:x), q_target, register)
     end
-    return result
 end
-
-"""
-    apply_gate_t(q_reg::String, q_idx::Union{Int, Nothing}=nothing)
-
-    Apply S gate to qubit `q_idx` in register `q_reg`. If `is_adjoint==true`, applies S^{dagger}
-"""
-function apply_gate_s(q_reg::String, q_idx::Union{Int, Nothing}=nothing, is_adjoint::Union{Bool, Nothing}=nothing)
-    #If no index given, apply same ops across entire register
-    if is_adjoint == nothing || is_adjoint == false
-        result = qasm_map["S"]
+function pauli_y(q_target::Int, register::Union{String, Nothing}=nothing)
+    if register == nothing
+        return GateCall1(GateLabel(:y), q_target)
     else
-        result = qasm_map["SDG"]
-    end        
+        return GateCall1(GateLabel(:y), q_target, register)
+    end
+end
+function pauli_z(q_target::Int, register::Union{String, Nothing}=nothing)
+    if register == nothing
+        return GateCall1(GateLabel(:z), q_target)
+    else
+        return GateCall1(GateLabel(:z), q_target, register)
+    end
+end
+function hadamard(q_target::Int, register::Union{String, Nothing}=nothing)
+    if register == nothing
+        return GateCall1(GateLabel(:h), q_target)
+    else
+        return GateCall1(GateLabel(:h), q_target, register)
+    end
+end
+
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
+
+struct u_gate_schema{NType<:Number}
+    schema::Union{Tuple{NType,NType,NType,NType}, Tuple{NType, Bool}}
+    type::String
+    u_gate_schema{NType}(schema) where {NType<:Number} = length(schema) == 2 ? new(schema, "r") : new(schema, "e")
+end
+
+# Arbitrary U matrix can be defined with generating parameters
+# Gate schema can be used to indicate construction params 
+# ("r" uses given gate, sqrt depth and adjoint; "e" uses euler angles and phase)
+function u(label::GateLabel, q_target::Int, register::Union{String, Nothing}=nothing)
+    return GateCall1( label, q_target, register)
+end
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
+
+function r_x(q_target::Int, theta::Real, register::Union{String, Nothing}=nothing)
+    if register == nothing
+        return GateCall1(GateLabel(Symbol("r_x" * "_" * "angle=" * string(theta)), Dict("angle"=>theta)), q_target )
+    else
+        return GateCall1(GateLabel(Symbol("r_x" * "_" * "angle=" * string(theta)), Dict("angle"=>theta)), q_target, register )
+    end
+end
+function r_y(q_target::Int, theta::Real, register::Union{String, Nothing}=nothing)
+    if register == nothing
+        return GateCall1(GateLabel(Symbol("r_y" * "_" * "angle=" * string(theta)), Dict("angle"=>theta)), q_target )
+    else
+        return GateCall1(GateLabel(Symbol("r_y" * "_" * "angle=" * string(theta)), Dict("angle"=>theta)), q_target, register )
+    end
+end
+function r_z(q_target::Int, theta::Real, register::Union{String, Nothing}=nothing)
+    if register == nothing
+        return GateCall1(GateLabel(Symbol("r_z" * "_" * "angle=" * string(theta)), Dict("angle"=>theta)), q_target )
+    else
+        return GateCall1(GateLabel(Symbol("r_z" * "_" * "angle=" * string(theta)), Dict("angle"=>theta)), q_target, register )
+    end
+end
+function r_phase(q_target::Int, theta::Real, register::Union{String, Nothing}=nothing)
+    if register == nothing
+        return GateCall1(GateLabel(Symbol("r_phase" * "_" * "angle=" * string(theta)), Dict("angle"=>theta)), q_target )
+    else
+        return GateCall1(GateLabel(Symbol("r_phase" * "_" * "angle=" * string(theta)), Dict("angle"=>theta)), q_target, register )
+    end
+end
+
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
+#                            2Q Gate calls ops
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
+
+function swap(q_target::Int, q_ctrl::Int, register::Union{String, Nothing}=nothing)
+    return GateCall2( GateLabel(:swap), q_target, q_ctrl)
+end
+function c_pauli_x(q_target::Int, q_ctrl::Int, register::Union{String, Nothing}=nothing)
+    return GateCall2( GateLabel(:c_x), q_target, q_ctrl, pauli_x(q_target,register), register)
+end
+function c_pauli_y(q_target::Int, q_ctrl::Int, register::Union{String, Nothing}=nothing)
+    return GateCall2( GateLabel(:c_y), q_target, q_ctrl, pauli_y(q_target,register), register)
+end
+function c_pauli_z(q_target::Int, q_ctrl::Int, register::Union{String, Nothing}=nothing)
+    return GateCall2( GateLabel(:c_z), q_target, q_ctrl, pauli_z(q_target,register), register)
+end
+function c_u(label::String, q_target::Int, q_ctrl::Int, params::Dict, register::Union{String, Nothing}=nothing)
+    return GateCall2( GateLabel( Symbol(label), params), q_target, q_ctrl, register)
+end
+function c_u(label::GateLabel, q_target::Int, q_ctrl::Int, gc::GateCall1, register::Union{String, Nothing}=nothing)
+    return GateCall2( label, q_target, q_ctrl, gc, register)
+end
+
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
+
+function c_r_x(q_target::Int, q_ctrl::Int, theta::Real, register::Union{String, Nothing}=nothing)
+    return GateCall2( GateLabel( Symbol("c_r_x" * "_" * "angle=" * string(theta)), Dict("angle"=>theta) ), q_target, q_ctrl )
+end
+function c_r_y(q_target::Int, q_ctrl::Int, theta::Real, register::Union{String, Nothing}=nothing)
+    return GateCall2( GateLabel( Symbol("c_r_y" * "_" * "angle=" * string(theta)), Dict("angle"=>theta) ), q_target, q_ctrl, Dict("theta"=>theta) )
+end
+function c_r_z(q_target::Int, q_ctrl::Int, theta::Real, register::Union{String, Nothing}=nothing)
+    return GateCall2( GateLabel( Symbol("c_r_z" * "_" * "angle=" * string(theta)), Dict("angle"=>theta) ), q_target, q_ctrl, Dict("theta"=>theta) )
+end
+function c_r_phase(q_target::Int, q_ctrl::Int, theta::Real, register::Union{String, Nothing}=nothing)
+    return GateCall2( GateLabel( Symbol("c_r_phase" * "_" * "angle=" * string(theta)), Dict("angle"=>theta) ), q_target, q_ctrl, Dict("theta"=>theta) )
+end
+
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
+#                           Utility functions
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
+
+function create_label_r(params::Dict)
+    label = params["label"]
+    sqrt_depth = params["depth"]
+    adj = params["adj"]
+    return "$(label)_$(sqrt_depth)_$(adj)"
+end
+function create_label_e(params::Dict)
+    label = params["label"]
+    θ = params["θ"]
+    ϕ = params["ϕ"]
+    λ = params["λ"]
+    phase = params["phase"]
+    return "$(label)_$(θ)_$(λ)_$(phase)"
+end
+
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
+
+@memoize function Base.:sqrt(g::Gate)
+    return Gate(sqrt(g.mat))
+end
+
+@memoize function Base.:adjoint(gate::Gate)
+    return Gate(adjoint(gate.mat))
+end
+
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
+
+
+@memoize function mat_to_euler(unitary::Matrix{<:Number})
+    """Finds rotation angles (a,b,c,d) in the decomposition u=exp(id)*Rz(c).Ry(b).Rz(a).
+    Direct port to Julia from qiskit: https://qiskit.org/documentation/_modules/qiskit/extensions/quantum_initializer/squ.html
+    """
+    u00 = unitary[1, 1]
+    u01 = unitary[1, 2]
+    u10 = unitary[2, 1]
+    u11 = unitary[2, 2]
+
+    tol = 1e-8 # Tolerance defines proximity to 0; assume 0 if less than tol
+
+    # Handle special case if the entry (0,0) of the unitary is equal to zero
+    if abs(u00) < tol
+        # Note that u10 can't be zero, since u is unitary (and u00 == 0)
+        gamma = angle(-u01 / u10)
+        delta = angle(u01 * exp(-1im * gamma / 2))
+        return 0., pi, -gamma, delta
+    end
+    # Handle special case if the entry (0,1) of the unitary is equal to zero
+    if abs(u01) < tol
+        # Note that u11 can't be zero, since u is unitary (and u01 == 0)
+        gamma = angle(u00 / u11)
+        delta = angle(u00 * exp(-1im * gamma / 2))
+        return 0., 0., -gamma, delta
+    end
+    beta = 2 * acos(abs(u00))
+    if sin(beta / 2) - cos(beta / 2) > 0
+        gamma = angle(-u00 / u10)
+        alpha = angle(u00 / u01)
+    else
+        gamma = -angle(-u10 / u00)
+        alpha = -angle(u01 / u00)
+    end
+    delta = angle(u00 * exp(-1im * (alpha + gamma) / 2))
+    # The decomposition works with another convention for the rotation gates
+    # (the one using negative angles).
+    # Therefore, we have to take the inverse of the angles at the end.
+    return -alpha, -beta, -gamma, delta
+end
+
+
+@memoize function zyz_to_u3(a,b,c,d)
+    """
+    theta, phi, lam, phase - 0.5 * (phi + lam)
+
+    - Z(phi) Y(theta) Z(lambda)
+    - e^{i gamma}{2})} U_3(theta,phi,lambda)
+    """
+    # Convert exp(id)*Rz(c).Ry(b).Rz(a) angles to u3
+    return (b, c, a, d -0.5*(a+c) )
+end
+@memoize function u3_to_zyz(a,b,c,d)
+    """
+    theta, phi, lam, phase - 0.5 * (phi + lam)
+
+    - Z(phi) Y(theta) Z(lambda)
+    - e^{i gamma}{2})} U_3(theta,phi,lambda)
+    """
+    # Convert exp(id)*Rz(c).Ry(b).Rz(a) angles to u3
+    return (b, c, a, d -0.5*(a+c) )
+end
+
+@memoize function euler_to_mat(a::Number,b::Number,c::Number,d::Number)
+    """Creates unitary from angles defined by mat_to_euler function as u=exp(id)*Rz(c).Ry(b).Rz(a).
+    """
+    u00 = exp(-1im*(c+a)/2)*cos(b/2)
+    u01 = -exp(1im*(a-c)/2)*sin(b/2)
+    u10 = exp(1im*(c-a)/2)*sin(b/2)
+    u11 = exp(1im*(a+c)/2)*cos(b/2)
+    return [u00 u01; u10 u11].*exp(1im*d)
+end
+
+@memoize function u3_to_mat(θ::Number,ϕ::Number,λ::Number,ph::Number)
+    """Creates unitary from angles defined by mat_to_euler function as u=exp(id)*Rz(c).Ry(b).Rz(a).
+    """
+    u00 = cos(θ/2)
+    u01 = -exp(1im*λ)*sin(θ/2)
+    u10 = exp(1im*ϕ)*sin(θ/2)
+    u11 = exp(1im*(ϕ+λ)/2)*cos(θ/2)
+    return [u00 u01; u10 u11].*exp(1im*ph)
+end
+
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
+
+function Base.:String(gc::AGateCall)
+    return String(gc.gate_label);
+end
+
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
+
+
+"""
+    create_gates_nonparam(gate_call::AGateCall)
+
+    Create QASM syntax for gates cached in g_map_lg dictionary. 
+    Single and controlled versions generated.
+    Maps X^{1/2^n} gates to H Z^{1/2^n} H
+
+"""
+function create_gates_nonparam(gate_call::AGateCall)
+    if isdefined(gate_call, :ctrl)
+        ct = "ctrl,tgt";
+        u_pre = "c"
+    else
+        ct = "tgt";
+        u_pre = ""
+    end
+    label = gate_call.gate_label
+    gate = g_map_lg[label]
+
+    # Problematic if z-gates not populated before x-gates; init to sufficient depth to prevent issues
+    if String(label.gate_label)[end] == 'x'
+        gate_label_sub = Symbol(String(label.gate_label)[1:end-1] * "z")
+        gate = g_map[gate_label_sub]
+    end
+
+    euler_vals = GateOps.mat_to_euler(gate)
+    u3_vals = GateOps.zyz_to_u3(euler_vals...)
+
+    # QASM and X^{1/2^n} gates do not work well, so map to H Z^{1/2^n} H
+    if String(label.gate_label)[end] == 'x'
+        g = """gate $(u_pre)$(label.gate_label) tgt{\nh tgt;\n$(u_pre)u3($(u3_vals[1]),$(u3_vals[2]),$(u3_vals[3])) tgt;\nh tgt;\n}"""
+    elseif String(label.gate_label)[end] == 'z'
+        g = """gate $(u_pre)$(label.gate_label) tgt{\n$(u_pre)u3($(u3_vals[1]),$(u3_vals[2]),$(u3_vals[3])) tgt;\n}"""
+    else
+        error("Unsupported gate: Pauli-X and Pauli-Z currently only supported")
+    end
+
+    return g
+end
+
+
+"""
+    create_gates_nonparam(gate_label::Symbol, num_qubits::Int
     
-    result = replace(result, "q_reg"=>q_reg)
+    Create QASM syntax for gates cached in g_map_lg dictionary. 
+    Single and controlled versions generated.
+    Maps X^{1/2^n} gates to H Z^{1/2^n} H
+
+"""
+function create_gates_nonparam(gate_label::Symbol, num_qubits::Int)
+    ct=""
+    gate = g_map[gate_label]
+
+    if String(gate_label)[end] == 'x'
+        gate_label_sub = Symbol(String(gate_label)[1:end-1] * "z")
+        gate = g_map[gate_label_sub]
+    end
+
+    euler_vals = GateOps.mat_to_euler(gate)
+    u3_vals = GateOps.zyz_to_u3(euler_vals...)
+
+    # QASM and X^{1/2^n} gates do not work well, so map to H Z^{1/2^n} H
+    if num_qubits == 1 && String(gate_label)[end] == 'x'
+        ct = "tgt"
+        g = """gate $(gate_label) tgt{\nh tgt;\nu3($(u3_vals[1]),$(u3_vals[2]),$(u3_vals[3])) tgt;\nh tgt;\n}"""
+    elseif num_qubits == 2 && String(gate_label)[end] == 'x'
+        ct = "ctrl,tgt"
+        g = """gate c$(gate_label) $(ct){\nh tgt;\ncu3($(u3_vals[1]),$(u3_vals[2]),$(u3_vals[3])) $(ct);\nh tgt;\n}"""
+    elseif num_qubits == 1 && String(gate_label)[end] == 'z'
+        ct = "tgt"
+        g = """gate $(gate_label) tgt{\nu3($(u3_vals[1]),$(u3_vals[2]),$(u3_vals[3])) tgt;\n}"""
+    else
+        ct = "ctrl,tgt"
+        g = """gate c$(gate_label) $(ct){\ncu3($(u3_vals[1]),$(u3_vals[2]),$(u3_vals[3])) $(ct);\n}"""
+    end
+
+    return g
+end
+
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
+
+# QASM interop functions
+function mat_to_u3(unitary::Matrix{<:Number})
+    # Direct port from Qiskit https://qiskit.org/documentation/_modules/qiskit/quantum_info/synthesis/one_qubit_decompose.html
+
+    coeff = 1/sqrt(det(unitary))
+    phase = -angle(coeff)
+    su_mat = coeff * unitary  # U in SU(2)
+
+    theta = 2 * atan(abs(su_mat[2, 1]), abs(su_mat[1, 1]))
+    phiplambda = 2 * angle(su_mat[2, 2])
+    phimlambda = 2 * angle(su_mat[2, 1])
+    phi = (phiplambda + phimlambda) / 2.0
+    lam = (phiplambda - phimlambda) / 2.0
     
-    if q_idx == nothing
-        result = replace(result, "[q_idx]"=>"")
-    else # Otherwise apply op to given qubit index
-        result = replace(result, "q_idx"=>q_idx)
-    end
-    return result
+    return theta, phi, lam, phase - 0.5 * (phi + lam)
 end
 
-"""
-    apply_gate_rx(q_reg::String, θ::Real, q_idx::Union{Int, Nothing}=nothing)
-
-    Apply R_x(theta) gate to qubit `q_idx` in register `q_reg`.
-"""
-function apply_gate_rx(q_reg::String, θ::Real, q_idx::Union{Int, Nothing}=nothing)
-    return apply_gate_u( bloch_angles(θ,-pi/2,pi/2), q_reg, q_idx)
-end
-
-"""
-    apply_gate_ry(q_reg::String, θ::Real, q_idx::Union{Int, Nothing}=nothing)
-
-    Apply R_y(theta) gate to qubit `q_idx` in register `q_reg`.
-"""
-function apply_gate_ry(q_reg::String, θ::Real, q_idx::Union{Int, Nothing}=nothing)
-    return apply_gate_u( bloch_angles(θ, 0, 0), q_reg, q_idx)
-end
-
-"""
-    apply_gate_rz(q_reg::String, θ::Real, q_idx::Union{Int, Nothing}=nothing)
-
-    Apply R_z(theta) gate to qubit `q_idx` in register `q_reg`.
-"""
-function apply_gate_rz(q_reg::String, ϕ::Real, q_idx::Union{Int, Nothing}=nothing)
-    return apply_gate_u( bloch_angles(0, 0, ϕ), q_reg, q_idx)
-end
-
-"""
-    apply_gate_cx(q_reg::String, q_idx::Union{Int, Nothing}=nothing)
-
-    Apply controlled-not (CX) gate.
-"""
-function apply_gate_cx(q_reg::String, q_ctrl_idx::Int, q_tgt_idx::Int)
-    result = replace(qasm_map["CX"], "ctrl"=>"$q_reg[$q_ctrl_idx]")
-    result = replace(result, "tgt"=>"$q_reg[$q_tgt_idx]")
-    return result
-end
-
-"""
-    apply_gate_cy(q_reg::String, q_idx::Union{Int, Nothing}=nothing)
-
-    Apply controlled-not (CY) gate.
-"""
-function apply_gate_cy(q_reg::String, q_ctrl_idx::Int, q_tgt_idx::Int)
-    result =  apply_gate_u( bloch_angles(0, 0, -pi/2), q_reg, q_tgt_idx);
-    result *= apply_gate_cx(q_reg, q_ctrl_idx, q_tgt_idx)
-    result *= apply_gate_u( bloch_angles(0, 0, pi/2), q_reg, q_tgt_idx);
-    return result
-end
-
-"""
-    apply_gate_cz(q_reg::String, q_idx::Union{Int, Nothing}=nothing)
-
-    Apply controlled-not (CZ) gate.
-"""
-function apply_gate_cz(q_reg::String, q_ctrl_idx::Int, q_tgt_idx::Int)
-    result =  apply_gate_h(q_reg, q_tgt_idx)
-    result *= apply_gate_cx(q_reg, q_ctrl_idx, q_tgt_idx)
-    result *= apply_gate_h(q_reg, q_tgt_idx)
-    return result 
-end
-
-"""
-    apply_gate_ccx(q_reg::String, q_ctrl_idx1::Int, q_ctrl_idx2::Int, q_tgt_idx::Int)
-
-    Apply controlled-controlled-not (CCX, Tofolli) gate.
-"""
-function apply_gate_ccx(q_reg::String, q_ctrl_idx1::Int, q_ctrl_idx2::Int, q_tgt_idx::Int)
-    result =  apply_gate_h(q_reg, q_tgt_idx)
-    result *= apply_gate_cx(q_reg, q_ctrl_idx2, q_tgt_idx)
-    result *= apply_gate_t(q_reg, q_tgt_idx, true)
-    result *= apply_gate_cx(q_reg, q_ctrl_idx1, q_tgt_idx)
-    result *= apply_gate_t(q_reg, q_tgt_idx, false)
-    result *= apply_gate_cx(q_reg, q_ctrl_idx2, q_tgt_idx)
-    result *= apply_gate_t(q_reg, q_tgt_idx, true)
-    result *= apply_gate_cx(q_reg, q_ctrl_idx1, q_tgt_idx)
-    result *= apply_gate_t(q_reg, q_ctrl_idx2, false)
-    result *= apply_gate_t(q_reg, q_tgt_idx, false)
-    result *= apply_gate_h(q_reg, q_tgt_idx)
-    result *= apply_gate_cx(q_reg, q_ctrl_idx1, q_ctrl_idx2)
-    result *= apply_gate_t(q_reg, q_ctrl_idx1, false)
-    result *= apply_gate_t(q_reg, q_ctrl_idx2, true)
-    result *= apply_gate_cx(q_reg, q_ctrl_idx1, q_ctrl_idx2)
-    return result 
-end
-
-"""
-    apply_gate_cphase(q_reg::String, λ::Real, q_ctrl_idx::Int, q_tgt_idx::Int)
-
-    Apply controlled-phase (Controlled-[[1,0],[0, exp(iλ)]]) gate.
-"""
-function apply_gate_cphase(q_reg::String, λ::Real, q_ctrl_idx::Int, q_tgt_idx::Int)
-    # [[1,0],[0, exp(iλ)]]
-    result =  apply_gate_u( bloch_angles(0, 0, λ/2), q_reg, q_ctrl_idx);
-    result *= apply_gate_cx(q_reg, q_ctrl_idx, q_tgt_idx);
-    result *= apply_gate_u( bloch_angles(0, 0, -λ/2), q_reg, q_tgt_idx);
-    result *= apply_gate_cx(q_reg, q_ctrl_idx, q_tgt_idx);
-    result *= apply_gate_u( bloch_angles(0, 0, λ/2), q_reg, q_tgt_idx);
-end
-
-
-"""
-    apply_gate_phaseshift(q_reg::String, λ::Real, q_ctrl_idx::Int, q_tgt_idx::Int)
-
-    Apply diagonal phase shifting gate [[exp(iλ), 0],[0, exp(iλ)]]
-"""
-function apply_gate_phaseshift(q_reg::String, λ::Real, q_tgt_idx::Int)
-    result = apply_gate_x( q_reg, q_tgt_idx);
-    result *=  apply_gate_u( bloch_angles(0, 0, λ), q_reg, q_tgt_idx);
-    result *= apply_gate_x( q_reg, q_tgt_idx);
-    result *= apply_gate_u( bloch_angles(0, 0, λ), q_reg, q_tgt_idx);
-end
-
-"""
-    apply_gate_cu(angles::bloch_angles, q_reg::String, q_ctrl_idx::Int, q_tgt_idx::Int)
-
-    Apply controlled unitary (CU) gate.
-"""
-function apply_gate_cu(angles::bloch_angles, q_reg::String, q_ctrl_idx::Int, q_tgt_idx::Int)
-    result = replace(qasm_map["CU_Decomp"], "ctrl"=>"$q_reg[$q_ctrl_idx]")
-    result = replace(result, "tgt"=>"$q_reg[$q_tgt_idx]")
-    result = replace(result, "theta"=>pi_convert(angles.θ))
-    result = replace(result, "phi"=>pi_convert(angles.ϕ))
-    result = replace(result, "lambda"=>pi_convert(angles.λ))
-
-    # If there is a non-zero phase, apply that to q_tgt_idx
-    if ~isapprox(angles.g_phase, 0, atol=1e-5)
-        @debug "NON ZERO PHASE=$(angles.g_phase) func=apply_gate_cu"
-        result *= apply_gate_phaseshift(q_reg, angles.g_phase, q_tgt_idx)
-    end
-
-    return result
-end
-
-
-"""
-    apply_swap(q_reg::String, q1::Int, q2::Int)
-
-    Swap qubit states between q1 and q2
-"""
-function apply_swap(q_reg::String, q1::Int, q2::Int)
-    result =  apply_gate_cx(q_reg, q1, q2)
-    result *= apply_gate_cx(q_reg, q2, q1)
-    result *= apply_gate_cx(q_reg, q1, q2)
-    return result
-end
-
-function gen_qasm_header(num_q::Int64, num_c::Int64, label_q::String, label_c::String)
-    h = "OPENQASM 2.0;include \"qelib1.inc\";"
-    h *= "qreg $label_q[$num_q];";
-    h *= "creg $label_c[$num_c];";
-    return h
-end
-
-function measure_qubit(idx_q::Int64, idx_c::Int64, label_q::String, label_c::String)
-    return "measure $label_q[$idx_q] -> $label_c[$idx_c];"
-end
-
-function measure_qubits_all(idx_q::Vector{Int64}, idx_c::Vector{Int64}, label_q::String, label_c::String)
-    m = ""
-    for i in idx_q
-        m*="measure $label_q[$i] -> $label_c[$i];"
-    end
-    return m;
-end
-
-function reset_reg(idx_q::Vector{Int64}, label_q::String)
-    result = ""
-    for i in idx_q
-        result *= "reset $label_q[$i];"
-    end
-    return result;
-end
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
 
 end

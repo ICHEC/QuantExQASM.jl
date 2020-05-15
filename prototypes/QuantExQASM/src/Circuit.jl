@@ -1,6 +1,7 @@
 module Circuit
-using Main.GateOps
-using Main.CircuitList
+
+using QuantExQASM.GateOps
+using QuantExQASM.CircuitList
 using DataStructures
 
 export append!
@@ -13,10 +14,10 @@ export append!
 # Since many different circuits may use the same gates, keeping a module-global cache makes sense to avoid
 # recreating them. Each subcircuit can have a subset of the global cache's gates.
 gate_cache = Dict{GateOps.GateLabel, Matrix{<:Number}}(
-    Main.GateOps.GateLabel(:x)=>([0 1; 1 0].+0im),
-    Main.GateOps.GateLabel(:y)=>([0 -1im; 1im 0]),
-    Main.GateOps.GateLabel(:z)=>([1 0; 0 -1].+0im),
-    Main.GateOps.GateLabel(:h)=>((1/sqrt(2)).*[1 1; 1 -1].+0im),
+    GateOps.GateLabel(:x)=>([0 1; 1 0].+0im),
+    GateOps.GateLabel(:y)=>([0 -1im; 1im 0]),
+    GateOps.GateLabel(:z)=>([1 0; 0 -1].+0im),
+    GateOps.GateLabel(:h)=>((1/sqrt(2)).*[1 1; 1 -1].+0im),
 )
 
 """
@@ -132,6 +133,7 @@ Maintains MLL of gate-calls and a set of the gates used.
 struct Circ
     circ_ops::CircuitList.CList{<:GateOps.AGate}
     gate_set::Set{GateOps.GateLabel}
+    num_qubits::Int
 end
 
 """
@@ -147,13 +149,22 @@ function Circ()
         GateOps.GateLabel(:z),
         GateOps.GateLabel(:h),
     ])
-    return Circ(circ_ops, gate_set)
+    return Circ(circ_ops, gate_set, 0)
 end
-
+function Circ(num_qubits)
+    circ_ops = CircuitList.CList{Union{GateOps.GateCall1, GateOps.GateCall2}}()
+    gate_set = Set{GateOps.GateLabel}([
+        GateOps.GateLabel(:x),
+        GateOps.GateLabel(:y),
+        GateOps.GateLabel(:z),
+        GateOps.GateLabel(:h),
+    ])
+    return Circ(circ_ops, gate_set, num_qubits)
+end
 
 function Base.:append!(c1::Circ, c2::Circ)
     append!(c1.circ_ops, c2.circ_ops)
-    union!(c1.gate_set,c2.gate_set)
+    union!(c1.gate_set, c2.gate_set)
 end
 
 
@@ -167,7 +178,7 @@ Adds the given gate call `gc` to the circuit at the end position.
 julia> Circuit.add_gatecall!(circ, GateOps.paul_x(4)) #Apply Paulix to qubit index 4
 ```
 """
-function add_gatecall!(circ::Circ, gc::GateOps.AGateCall)
+function add_gatecall!(circ::Circ, gc::GateOps.GateCall1)
     if ~haskey(gate_cache, gc.gate_label)
         error("Gate $(gc.gate_label) not registered")
     end
@@ -176,6 +187,16 @@ function add_gatecall!(circ::Circ, gc::GateOps.AGateCall)
     end
     push!(circ.circ_ops, gc);
 end
+function add_gatecall!(circ::Circ, gc::GateOps.GateCall2)
+    if ~haskey(gate_cache, gc.base_gate.gate_label)
+        error("Gate $(gc.gate_label) not registered")
+    end
+    if ~(gc.base_gate.gate_label in circ.gate_set)
+        push!(circ.gate_set, gc.base_gate.gate_label)
+    end
+    push!(circ.circ_ops, gc);
+end
+
 
 """
     to_string(circ::Circ)
@@ -203,13 +224,6 @@ function gates_to_qasm()
     for (k,v) in gate_cache
 
 
-    end
-end
-
-function to_qasm(circ::Circ)
-    circ_buffer = IOBuffer()
-    for c in circ.circ_ops
-        write(circ_buffer, )
     end
 end
 
@@ -255,10 +269,8 @@ function apply_cu(q_ctrl, q_tgt, U)
     println("c$(U) $(q_ctrl),$(q_tgt);")
 end
 
-
 Base.:sqrt(U::Symbol) = Symbol("s"*string(U))
 Base.:adjoint(U::Symbol) = Symbol("a"*string(U))
-
 
 # =========================================================================== #
 # =========================================================================== #
@@ -274,5 +286,84 @@ function get_qasm_gateset(circ::Circ)
     end
     return gs
 end
+
+##################################################################
+
+function gatelabel_to_qasm(gl::GateOps.GateLabel)
+    if String(gl.label) in ["c_x", "x", "y", "z", "h"]
+        return "\n"
+    end
+
+    u3_vals = GateOps.mat_to_u3( Circuit.gate_cache[gl] )
+
+    qasm_gates = 
+    """gate $(gl.label) tgt{
+        u3($(u3_vals[1]),$(u3_vals[2]),$(u3_vals[3])) tgt;
+    }
+    gate c_$(gl.label) ctrl,tgt{
+        cu3($(u3_vals[1]),$(u3_vals[2]),$(u3_vals[3])) ctrl,tgt;
+    }
+    """
+    return qasm_gates
+end
+
+function gatecall_to_qasm(gc::GateOps.GateCall1)
+    gate_tag = gc.gate_label.label
+    if gc.reg == nothing
+        reg="q"
+    else
+        reg = gc.reg
+    end
+    return "$(gate_tag) $(reg)[$(gc.target)];\n"
+end
+
+function gatecall_to_qasm(gc::GateOps.GateCall2)
+    if gc.reg == nothing
+        reg="q"
+    else
+        reg = gc.reg
+    end
+    if String(gc.gate_label.label) in ["c_x"]
+        return "cx $(reg)[$(gc.ctrl)],$(reg)[$(gc.target)];\n"
+    else
+        gate_tag = gc.gate_label.label
+        return "c_$(gate_tag) $(reg)[$(gc.ctrl)],$(reg)[$(gc.target)];\n"
+    end
+end
+
+function add_header(num_qubits::Int, reg::String="q", creg::String="c")
+    return """
+    OPENQASM 2.0;
+    include "qelib1.inc";
+    qreg $(reg)[$(num_qubits)];
+    creg $(creg)[$(num_qubits)];
+    """
+end
+
+function to_qasm(circ::Circ, header::Bool=true, filename::Union{String, Nothing}=nothing)
+    circ_buffer = IOBuffer()
+
+    if header == true
+        write(circ_buffer, add_header(circ.num_qubits))
+    end
+
+    for l in circ.gate_set
+        write(circ_buffer, gatelabel_to_qasm(l))
+    end
+
+    for c in circ.circ_ops
+        write(circ_buffer, gatecall_to_qasm(c))
+    end
+    
+    if filename==nothing
+        return circ_buffer.data
+    else
+        open(filename, "w") do f
+            write(f, circ_buffer.data)
+        end
+    end
+end
+
+# Need to ensure sz gates are generated during the ncx operations
 
 end
