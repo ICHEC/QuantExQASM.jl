@@ -1,5 +1,6 @@
 using Pkg
 using Logging
+using UnicodePlots
 
 # Activate local packages from repo if not installed
 try
@@ -36,6 +37,8 @@ function create_grover_circuit(num_qubits::Int, bit_pattern::Int=11)
     # Convert circuit to QASM populated buffer
     cct_s = QuantExQASM.Circuit.to_qasm(cct, true)
     # Convert to Qiskit loaded qasm circuit
+    #println( String(cct_s) )
+    #exit()
     return PicoQuant.load_qasm_as_circuit( String(cct_s) )
 end
 
@@ -96,7 +99,7 @@ function create_ncu_circuit(num_qubits::Int, gl::QuantExQASM.GateOps.GateLabel=Q
     # Convert circuit to QASM populated buffer
     QuantExQASM.Circuit.to_qasm(cct, true, "out.qasm")
     cct_s = QuantExQASM.Circuit.to_qasm(cct, true)
-    #cct *= QuantExQASM.GateOps.measure_qubits_all(vcat(ctrl,tgt), vcat(ctrl,tgt), q_reg_label, c_reg_label)
+
     return PicoQuant.load_qasm_as_circuit( String(cct_s) )
 end
 
@@ -147,16 +150,17 @@ function text_output(filename, circuit)
     circuit.draw(output="text", filename=text_filename)
 end
 function tn_output(filename, circuit)
-    tng = PicoQuant.convert_to_tensor_network_graph(circuit)
+    tng = PicoQuant.convert_qiskit_circ_to_network(circuit)
     tn_filename = "$filename.json"
     open(tn_filename, "w") do io
-        write(io, PicoQuant.to_json(tng, parsed_args["indent"]))
+        write(io, PicoQuant.to_json(tng, 4))
     end
 end
 function qasm_output(filename, circuit)
     qasm_filename = "$filename.qasm"
+
     open(qasm_filename, "w") do io
-        write(io, circuit.qasm())
+        write(io, circuit.decompose().qasm())
     end
 end
 
@@ -207,11 +211,56 @@ function parse_commandline()
             "--qiskit-generated"
                 help = "Use qiskit's inbuilt QFT class instead of constructing circuit manually "
                 action = :store_true
+            "--run-qiskit"
+                help = "Run the example circuit on Qiskit's QASM simulator"
+                action = :store_true
         end
         return parse_args(s)
 end
 
 # *************************************************************************** #
+
+function run_on_qiskit(circuit)
+
+    qiskit = pyimport("qiskit")
+
+    for i in 0:circuit.num_qubits-1
+        circuit.measure(i, i)
+    end
+    
+    # Use Aer's qasm_simulator
+    simulator = qiskit.Aer.get_backend("qasm_simulator")
+    
+    # Execute the circuit on the qasm simulator
+    job = qiskit.execute(circuit, simulator, shots=1000)
+    
+    # Grab results from the job
+    result = job.result()
+    
+    # Returns counts
+    counts = result.get_counts(circuit)
+    return counts
+end
+
+function run_on_qiskit2(circuit)
+    qiskit = pyimport("qiskit")
+
+    for i in 0:circuit.num_qubits-1
+        circuit.measure(i, i)
+    end
+
+    backend = qiskit.providers.aer.QasmSimulator()
+    backend_options = Dict("method"=>"matrix_product_state", "max_parallel_threads"=>2, "max_parallel_shots"=>4)
+    
+    # Circuit execution
+    job = qiskit.execute(circuit, backend, shots=1000, backend_options=backend_options)
+    # Grab results from the job
+    result = job.result()
+    
+    # Returns counts
+    counts = result.get_counts(circuit)
+    return counts 
+end
 
 function main()
     parsed_args = parse_commandline()
@@ -239,6 +288,16 @@ function main()
         throw("Unknown use-case")
     end
     # ************************* #
+    if parsed_args["run-qiskit"] == true
+        counts = run_on_qiskit(circuit)
+        println(counts)
+
+        k = collect(keys(counts))
+        v = convert(Array{Int}, collect(values(counts)))
+        b = barplot(k, v)
+        print(b)
+        return;
+    end
     # ************************* #
     if parsed_args["output"] == ""
         filename = "$(use_case)_$(qubits)"
@@ -247,7 +306,7 @@ function main()
     end
     # ************************* #
     # ************************* #
-
+    #Output multiple types by giving csv labels
     out_types = split(parsed_args["gen-type"],",")
     for i in out_types
         output_fcall[i](filename, circuit)
