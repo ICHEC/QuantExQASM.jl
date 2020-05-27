@@ -1,10 +1,20 @@
 \section{NCU use-case}
-The application of two-qubit controlled unitary gates (operators) is essential to exploit the full extent of quantum devices. The CNOT (controlled $\sigma_x$) gate is a prime example, allowing the application of $\sigma_x$ to a target qubit if the controlling qubit is $\vert 1 \rangle$. A generalised variant of this gate type extends to $n$-controlling qubits, applying a unitary gate $U$ if they are all $\vert 1 \rangle$. This NCU ($n$-controlled unitary) gate can be an important tool in developing many algorithms. As such, we develop methods to generate circuits for realising such NCU gates.
+The application of two-qubit controlled unitary gates (operators) is essential to exploit the full extent of quantum devices. The CNOT (controlled $\sigma_x$) gate is a prime example, allowing the application of $\sigma_x$ to a target qubit if the controlling qubit is $\vert 1 \rangle$. A generalised variant of this gate type extends to $n$-controlling qubits, applying a unitary gate $U$ if they are all $\vert 1 \rangle$. This NCU ($n$-controlled unitary) gate structure can be an important tool in developing many algorithms. As such, we implement methods to generate circuits for realising such NCU gates.
 
 \subsection{Introduction}
-A fundamental element of computer science is branching, where the flow of control in a given program can take different paths based on some controlling logic. The \verb+if-else+ statements can be use to implement such logical control in classical devices. In quantum computing environments, the closest analogous operation are those of controlled unitary ($CU$) gates. The purpose of a CU gate is to apply a given unitary gate to a target qubit depending upon the values of another controlling qubit. The smallest variant of these such gates are the 2-qubit controlled gates, with the controlled-NOT (CNOT), and controlled Y-rotation (CR$_{y}$) being two such examples. 
+A fundamental element of computer science is branching, where the flow of control in a given program can take different paths based on some controlling logic. The \verb+if-else+ statements can be use to implement such logical control in classical devices. In quantum computing environments, the closest analogous operation are those of controlled unitary ($CU$) gates. The purpose of a CU gate is to apply a given unitary gate to a target qubit depending upon the values of another controlling qubit. The smallest variant of these such gates are the 2-qubit controlled gates, with the controlled-NOT (CNOT), controlled-Z (CZ), and controlled Y-rotation (CR$_{y}$) being three such examples. 
 
 It is known that all larger CU gates with $n$-control qubits (NCU) can be decomposed into fundamental 2-qubit controls~\cite{barenco_elementary_1995}. These gates form the back-bone of many other algorithms, with the diffusion gate in Grover's search algorithm~\cite{grover_1996} being a notable example. As such, having a scalable implementation allowing the use of these gates is important for evaluating many real-world examples and problems.
+
+As a consequence of implementing this gate structure we can gain the following outcomes:
+
+\begin{enumerate}
+\item It enables the implementation of generalised variants of additional quantum algorithms.
+\item It provides functionality unavailable in many other quantum software suites.
+\item It allows for an easy means to generate deep quantum circuits, useful when verifying different tensor contraction and approximation strategies.
+\item Examines the ability of the underlying suite to handle non-local 2-qubit gates at scale.
+\end{enumerate}
+
 
 \subsection{Operations}
 As an example, we can take the 2 qubit controlled-NOT ($\textrm{CNOT}_{c,t}$) gate, wherein the application of the NOT ($\sigma_x$) gate to a target qubit, $t$, is controlled by the values of another qubit, $c$, defined as:
@@ -82,40 +92,23 @@ Additionally, given the existence of auxiliary qubits $n_a$, we can further opti
 For completeness, we implement the above 3 decomposition strategies:
 \begin{itemize}
 \item Default quadratic decomposition as defined by circuit~\eqref{eqn:3cu_decomp} for $n \geq 2$ controls.
-\item Improved 3CU decomposition.
-\item Linear decomposition of $n\geq5$ controls using $a\geq n-2$ auxiliary qubits.
+\item Improved 3CU decomposition for $n \eq 3$ controls.
+\item Linear decomposition of $n \geq 5$ controls using $a\geq n-2$ auxiliary qubits.
 \end{itemize}
+
+In addition, due to ability to map CX gates to CZ and vice versa, we implement strategies to ensure all gate decompositions result in diagonal (controlled $\sqrt[k]{Z}$) gates. This ensures compatibility with currently existing simulator and circuit composition suites (e.g IBM Qiskit). As such, we can easily verify these methods and compare with results using existing platforms.
+
+To aid with the decomposition of large NCU structures, the caching of intermediate gates is performed to minimise repeated calculations.
  
 \subsection{Testing procedure}
 
-\begin{enumerate}
-\item It enables the implementation of generalised variants of additional quantum algorithms.
-\item It provides functionality NCU unavailable in many other quantum software suites.
-\item It allows for an easy means to generate deep quantum circuits, useful when verifying different tensor contraction and approximation strategies.
-\item Examines the ability of the underlying suite to handle non-local 2-qubit gates at scale.
-\end{enumerate}
-
-
 \subsubsection{Validation}
-Starting with a qubit register of $\vert 0 \rangle^{\otimes n}$, we can make use of an $n-1$ controlled unitary gate, where the control qubits are indexed as $c \in \{q_1,..,q_{n-1} \}$, and the target qubit as $ t = q_n$. We calculate the submatrix decomposition of the unitary matrix $U$ as $V=\sqrt{U}$ and $V^{\dagger}=\sqrt{U}^{\dagger}$. From here, we can recursively call the decomposition routine to further decompose gates with $n>1$ control lines. The base case can then rely on the available 2 qubit $CU$ routines to apply the appropriately decomposed gate matrix.
+Starting with a qubit register of $\vert 1 \rangle^{\otimes n}$, we can make use of an $n$ controlled unitary gate, where the control qubits are indexed as $c \in \{q_1,..,q_{n} \}$, and the target qubit as $ t = q_n+1$. We calculate the submatrix decomposition of the unitary matrix $U$ as $V=\sqrt{U}$ and $V^{\dagger}=\sqrt{U}^{\dagger}$. From here, we can recursively call the decomposition routine to further decompose gates with $n>1$ control lines. The base case can then rely on the available 2 qubit $CU$ routines to apply the appropriately decomposed gate matrix.
 
-For validating this we can examine the states for the appropriate target to flip from $\vert 0\rangle$ to $\vert 1 \rangle$. By defining all potential starting states for a given qubit register and applying the NCU operation, we should see the case of $\vert 1 \rangle^{\otimes n} \vert 0 \rangle$ become $\vert 1 \rangle^{\otimes n} \vert 1 \rangle$. Larger NCU circuits will require the use of the optimised modules to ensure reasonable computational complexity.
+For validating this we can examine the states for the appropriate target to flip from $\vert 0\rangle$ to $\vert 1 \rangle$. By defining all potential starting states for a given qubit register and applying the NCU operation, we should see the case of $\vert 1 \rangle^{\otimes n} \vert 0 \rangle$ become $\vert 1 \rangle^{\otimes n} \vert 1 \rangle$. Larger NCU circuits will require the use of the optimised modules to ensure reasonable computational complexity. For the purposes of simplicity, we can examine the application of the $n$-controlled Pauli-x gate (NCX) structure to a qubit register of $n+1$ gates, starting in state $\vert \psi \rangle = \vert 1\rangle^{\otimes n} \vert 0 \rangle$. The application of the NCX gate to the register will result in the following state change:
 
-\iffalse
-\subsubsection{Benchmarking}
-For benchmarking, we wish to compute the time taken for running the circuit with a range of circuit sizes and on different numbers of CPUs/GPUs and nodes. From 
-these, the scaling behaviour can be characterised. It is important to be aware that if using compression techniques (to reduce the dimension of intermediate tensors) 
-the runtime of the simulation will depend not only on the number of qubits and resources used, but also on the form and parameters of the ansatz circuit.
+\begin{equation}
+ \textrm{NCX }\vert \psi \rangle = \vert 1\rangle^{\otimes n+1}.
+\end{equation}
 
-\subsubsection{Tasks}
-Sketch of the tasks envisaged to implement this use cases are as follows:
-
-\begin{enumerate}
-\item Script to generate QASM for QFT circuit with a given number of qubits
-\item Script to generate QASM for ansatz circuit of given size and parameters (or to allow simulator start from arbitrary input state)
-\item Script to run simulator and calculate output amplitudes for a set of configurations
-\item Script to compare amplitudes and estimate the accuracy of the simulation
-\item Ability to accurately record run time
-\item Collate timings and accuracies, plot results and document conclusions
-\end{enumerate}
-\fi
+For comparison, all other register states but the above will result in no operation being applied to the target qubit in the register.
