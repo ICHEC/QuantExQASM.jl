@@ -1,0 +1,9 @@
+# QuantExQASM.jl Documentation
+
+#```@meta
+#CurrentModule = QuantExQASM
+#```
+
+```@docs
+QuantExQASM.Circuit.add_to_cache(label::QuantExQASM.GateOps.GateLabel, mat::Matrix{<:Number})
+```
