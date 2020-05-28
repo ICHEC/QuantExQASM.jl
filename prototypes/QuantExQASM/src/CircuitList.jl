@@ -5,6 +5,9 @@ import Base.append!
 import Base.iterate
 import Base.push!
 
+"""
+Node element in LList-type structure. Maintains forward and reverse links, data, and UUID.
+"""
 mutable struct Node{T}
     data::Union{Nothing, T}
     next::Union{Nothing, Node{T}}
@@ -16,6 +19,9 @@ mutable struct Node{T}
     Node{T}(data, next, prev) where {T} = new(data, next, prev, UUIDs.uuid1())
 end
 
+"""
+DLList structure for representing GateCalls. Maintains start, end and position pointer.
+"""
 mutable struct CList{T}
     len::Int
     head::Union{Nothing, Node{T}}

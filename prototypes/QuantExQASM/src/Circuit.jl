@@ -11,8 +11,9 @@ export append!
 # =========================================================================== #
 
 
-# Since many different circuits may use the same gates, keeping a module-global cache makes sense to avoid
-# recreating them. Each subcircuit can have a subset of the global cache's gates.
+"""Since many different circuits may use the same gates, keeping a module-global 
+cache makes sense to avoid recreating them. Each subcircuit can have a subset of 
+the global cache's gates."""
 gate_cache = Dict{GateOps.GateLabel, Matrix{<:Number}}(
     GateOps.GateLabel(:x)=>([0 1; 1 0].+0im),
     GateOps.GateLabel(:y)=>([0 -1im; 1im 0]),
@@ -41,25 +42,12 @@ end
 #                  Output generation functions
 # =========================================================================== #
 
-#map GateOps.AGate to QASM
-function gate_to_str(g::GateOps.AGate)
-
-end
-
 function gate_to_str(g::GateOps.GateLabel)
     p=[]
     if g.params != nothing
         p = ["$(k)=$(v)_" for (k,v) in g.params]
     end
     return String(g.label) * "_" * string(p...)
-end
-
-function gate_to_str(g::GateOps.GateCall1)
-
-end
-
-function gate_to_str(g::GateOps.GateCall2)
-    
 end
 
 # =========================================================================== #
@@ -151,6 +139,11 @@ function Circ()
     ])
     return Circ(circ_ops, gate_set, 0)
 end
+"""
+    Circ(num_qubits)
+
+Circ constructor for given number of qubits circuit. Registers Pauli and Hadamard gates during initialisation.
+"""
 function Circ(num_qubits)
     circ_ops = CircuitList.CList{Union{GateOps.GateCall1, GateOps.GateCall2}}()
     gate_set = Set{GateOps.GateLabel}([
@@ -187,6 +180,16 @@ function add_gatecall!(circ::Circ, gc::GateOps.GateCall1)
     end
     push!(circ.circ_ops, gc);
 end
+"""
+    add_gatecall!(circ::Circ, gc::GateOps.AGateCall)
+
+Adds the given gate call `gc` to the circuit at the end position.
+
+# Examples
+```julia-repl
+julia> Circuit.add_gatecall!(circ, GateOps.c_paul_x(3,4)) #Apply C_Paulix to qubit index 3, controlled on 4
+```
+"""
 function add_gatecall!(circ::Circ, gc::GateOps.GateCall2)
     if ~haskey(gate_cache, gc.base_gate.gate_label)
         error("Gate $(gc.gate_label) not registered")
@@ -196,7 +199,6 @@ function add_gatecall!(circ::Circ, gc::GateOps.GateCall2)
     end
     push!(circ.circ_ops, gc);
 end
-
 
 """
     to_string(circ::Circ)
@@ -214,15 +216,6 @@ function to_string(circ::Circ)
         write(circ_buffer, )
     end
     for c in circ.circ_ops
-
-    end
-end
-
-function gates_to_qasm()
-    gate_buffer = IOBuffer()
-
-    for (k,v) in gate_cache
-
 
     end
 end
@@ -289,6 +282,11 @@ end
 
 ##################################################################
 
+"""
+    gatelabel_to_qasm(gl::GateOps.GateLabel)
+
+Defines an OpenQASM gate from the given GateLabel and matched matrix
+"""
 function gatelabel_to_qasm(gl::GateOps.GateLabel)
     if String(gl.label) in ["c_x", "x", "y", "z", "h"]
         return "\n"
@@ -307,6 +305,11 @@ function gatelabel_to_qasm(gl::GateOps.GateLabel)
     return qasm_gates
 end
 
+"""
+    gatecall_to_qasm(gc::GateOps.GateCall1)
+
+Convert a single-qubit gate call (GateCall1) to OpenQASM 
+"""
 function gatecall_to_qasm(gc::GateOps.GateCall1)
     gate_tag = gc.gate_label.label
     if gc.reg == nothing
@@ -317,6 +320,11 @@ function gatecall_to_qasm(gc::GateOps.GateCall1)
     return "$(gate_tag) $(reg)[$(gc.target)];\n"
 end
 
+"""
+    gatecall_to_qasm(gc::GateOps.GateCall2)
+
+Convert a two-qubit gate call (GateCall2) to OpenQASM 
+"""
 function gatecall_to_qasm(gc::GateOps.GateCall2)
     if gc.reg == nothing
         reg="q"
@@ -331,6 +339,11 @@ function gatecall_to_qasm(gc::GateOps.GateCall2)
     end
 end
 
+"""
+    add_header(num_qubits::Int, reg::String="q", creg::String="c")
+
+Returns the given OpenQASM header for number of quantum and classical bits.
+"""
 function add_header(num_qubits::Int, reg::String="q", creg::String="c")
     return """
     OPENQASM 2.0;
@@ -340,6 +353,11 @@ function add_header(num_qubits::Int, reg::String="q", creg::String="c")
     """
 end
 
+"""
+    to_qasm(circ::Circ, header::Bool=true, filename::Union{String, Nothing}=nothing)
+
+Convert a given circuit to OpenQASM.
+"""
 function to_qasm(circ::Circ, header::Bool=true, filename::Union{String, Nothing}=nothing)
     circ_buffer = IOBuffer()
 
@@ -363,7 +381,5 @@ function to_qasm(circ::Circ, header::Bool=true, filename::Union{String, Nothing}
         end
     end
 end
-
-# Need to ensure sz gates are generated during the ncx operations
 
 end

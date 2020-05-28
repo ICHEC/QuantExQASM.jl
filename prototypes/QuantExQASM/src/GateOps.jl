@@ -21,10 +21,14 @@ using Memoize
 #                       Lightweight gate calls
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
 
+"Abstract Gate type"
 abstract type AGate end
-abstract type AGateCall <: AGate end
+"Abstract Gate Label, for unique gates"
 abstract type AGateLabel <: AGate end
+"Abstract Gate Call, for tracking Gate labels applied to specific qubits"
+abstract type AGateCall <: AGate end
 
+"Parametric Gate label. Tracks the gate symbol (:x,:y,:z, etc), and arbitrary parameters"
 struct GateLabelP{IType<:Integer, NType<:Number} <: AGateLabel
     label::Symbol
     params::Union{Nothing, Dict{String, Union{IType, NType, Bool}}}
@@ -32,6 +36,7 @@ struct GateLabelP{IType<:Integer, NType<:Number} <: AGateLabel
     GateLabelP{IType,NType}(gate_label, params) where {IType<:Integer, NType<:Number} = new(gate_label, params)
 end
 
+"Parametric single qubit Gate call. Has a GateLabelP, target qubit index and register label"
 struct GateCall1P{IType<:Integer, NType<:Number} <: AGateCall
     gate_label::GateLabelP{IType, NType}
     target::IType
@@ -40,6 +45,10 @@ struct GateCall1P{IType<:Integer, NType<:Number} <: AGateCall
     GateCall1P{IType,NType}(gate_label, target) where {IType<:Integer, NType<:Number} = new(gate_label, target, nothing)
 end
 
+"""
+Parametric two qubit Gate call. 
+Has a GateLabelP, control and target qubit indices, register label, and base gate (assumes controlled U).
+"""
 struct GateCall2P{IType<:Integer, NType<:Number} <: AGateCall
     gate_label::GateLabelP{IType, NType}
     ctrl::IType
@@ -59,11 +68,15 @@ struct GateCall2P{IType<:Integer, NType<:Number} <: AGateCall
     new(gate_label, ctrl, target, nothing, nothing)
 end
 
+"""
+Parametric n-qubit Gate call. 
+Has a GateLabelP, control vector indices, target qubit index, register label, and base gate.
+"""
 struct GateCallNP{IType<:Integer, NType<:Number} <: AGateCall
     gate_label::GateLabelP{IType, NType}
     ctrl::Vector{IType}
     target::IType
-    base_gate::GateCall1P{IType, NType}
+    base_gate::Union{GateCall1P{IType, NType}, GateCall2P{IType, NType}, GateCallNP{IType, NType}, Nothing}
     reg::Union{String,Nothing}
     GateCallNP{IType,NType}(gate_label, ctrl, target, base_gate, reg) where {IType<:Integer, NType<:Number} = new(gate_label, ctrl, target, base_gate{IType,NType}, reg)
     GateCallNP{IType,NType}(gate_label, ctrl, target, base_gate) where {IType<:Integer, NType<:Number} = new(gate_label, ctrl, target, base_gate{IType,NType}, "")
@@ -79,11 +92,13 @@ GateCallN = GateCallNP{Int64, Float64}
 #                           Gate implementations
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
 
+"Wrap of Matrix to fit type system hierarchy"
 struct Gate <: AGateCall
     mat::Matrix{<:Number}
     Gate(mat) = new(mat)
 end
 
+"Placeholder struct for Euler-angle gate"
 struct GateEulerP{NType<:Number} <: AGateCall
     θ::NType
     ϕ::NType
@@ -103,6 +118,17 @@ GateEuler = GateEulerP{Float64}
 #                            1Q Gate calls ops
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
 
+"""
+    pauli_x(q_target::Int, register::Union{String, Nothing}=nothing)
+
+Generate a single qubit Pauli-x GateCall (GateCall1P) applied to the target qubit (on given register, if provided)
+
+# Examples
+```julia-repl
+julia> GateOps.pauli_x(0, "q")
+QuantExQASM.GateOps.GateCall1P{Int64,Float64}(QuantExQASM.GateOps.GateLabelP{Int64,Float64}(:x, nothing), 0, "q")
+```
+"""
 function pauli_x(q_target::Int, register::Union{String, Nothing}=nothing)
     if register == nothing
         return GateCall1(GateLabel(:x), q_target)
@@ -110,6 +136,18 @@ function pauli_x(q_target::Int, register::Union{String, Nothing}=nothing)
         return GateCall1(GateLabel(:x), q_target, register)
     end
 end
+
+"""
+    pauli_y(q_target::Int, register::Union{String, Nothing}=nothing)
+
+Generate a single qubit Pauli-y GateCall (GateCall1P) applied to the target qubit (on given register, if provided)
+
+# Examples
+```julia-repl
+julia> GateOps.pauli_y(0, "q")
+QuantExQASM.GateOps.GateCall1P{Int64,Float64}(QuantExQASM.GateOps.GateLabelP{Int64,Float64}(:y, nothing), 0, "q")
+```
+"""
 function pauli_y(q_target::Int, register::Union{String, Nothing}=nothing)
     if register == nothing
         return GateCall1(GateLabel(:y), q_target)
@@ -117,6 +155,18 @@ function pauli_y(q_target::Int, register::Union{String, Nothing}=nothing)
         return GateCall1(GateLabel(:y), q_target, register)
     end
 end
+
+"""
+    pauli_z(q_target::Int, register::Union{String, Nothing}=nothing)
+
+Generate a single qubit Pauli-z GateCall (GateCall1P) applied to the target qubit (on given register, if provided)
+
+# Examples
+```julia-repl
+julia> GateOps.pauli_z(0, "q")
+QuantExQASM.GateOps.GateCall1P{Int64,Float64}(QuantExQASM.GateOps.GateLabelP{Int64,Float64}(:z, nothing), 0, "q")
+```
+"""
 function pauli_z(q_target::Int, register::Union{String, Nothing}=nothing)
     if register == nothing
         return GateCall1(GateLabel(:z), q_target)
@@ -124,6 +174,18 @@ function pauli_z(q_target::Int, register::Union{String, Nothing}=nothing)
         return GateCall1(GateLabel(:z), q_target, register)
     end
 end
+
+"""
+    hadamard(q_target::Int, register::Union{String, Nothing}=nothing)
+
+Generate a single qubit Hadamard GateCall (GateCall1P) applied to the target qubit (on given register, if provided)
+
+# Examples
+```julia-repl
+julia> GateOps.hadamard(0, "q")
+GateOps.GateCall1P{Int64,Float64}(GateOps.GateLabelP{Int64,Float64}(:h, nothing), 0, "q")
+```
+"""
 function hadamard(q_target::Int, register::Union{String, Nothing}=nothing)
     if register == nothing
         return GateCall1(GateLabel(:h), q_target)
@@ -140,36 +202,91 @@ struct u_gate_schema{NType<:Number}
     u_gate_schema{NType}(schema) where {NType<:Number} = length(schema) == 2 ? new(schema, "r") : new(schema, "e")
 end
 
-# Arbitrary U matrix can be defined with generating parameters
-# Gate schema can be used to indicate construction params 
-# ("r" uses given gate, sqrt depth and adjoint; "e" uses euler angles and phase)
+"""
+    u(label::GateLabel, q_target::Int, register::Union{String, Nothing}=nothing)
+
+Generate a single qubit arbitrary unitary GateCall (GateCall1P) applied to the target qubit (on given register, if provided)
+
+# Examples
+```julia-repl
+julia> GateOps.u(GateOps.GateLabel(:mygate), 1, "qr")
+GateOps.GateCall1P{Int64,Float64}(GateOps.GateLabelP{Int64,Float64}(:mygate, nothing), 1, "qr")
+```
+"""
 function u(label::GateLabel, q_target::Int, register::Union{String, Nothing}=nothing)
     return GateCall1( label, q_target, register)
 end
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
 
-function r_x(q_target::Int, theta::Real, register::Union{String, Nothing}=nothing)
+"""
+    r_x(q_target::Int, theta::Real, register::Union{String, Nothing}=nothing)
+
+Generate a single qubit R_x(θ) GateCall (GateCall1P) applied to the target qubit (on given register, if provided)
+
+# Examples
+```julia-repl
+julia> GateOps.r_x(3,pi/2)
+GateOps.GateCall1P{Int64,Float64}(GateOps.GateLabelP{Int64,Float64}(Symbol("r_x_angle=1.5707963267948966"), Dict{String,Union{Bool, Float64, Int64}}("angle"=>1.5708)), 3, nothing)
+```
+"""
+function r_x(q_target::Int, theta::Number, register::Union{String, Nothing}=nothing)
     if register == nothing
         return GateCall1(GateLabel(Symbol("r_x" * "_" * "angle=" * string(theta)), Dict("angle"=>theta)), q_target )
     else
         return GateCall1(GateLabel(Symbol("r_x" * "_" * "angle=" * string(theta)), Dict("angle"=>theta)), q_target, register )
     end
 end
-function r_y(q_target::Int, theta::Real, register::Union{String, Nothing}=nothing)
+
+"""
+    r_y(q_target::Int, theta::Real, register::Union{String, Nothing}=nothing)
+
+Generate a single qubit R_y(θ) GateCall (GateCall1P) applied to the target qubit (on given register, if provided)
+
+# Examples
+```julia-repl
+julia> GateOps.r_y(3,pi/2)
+GateOps.GateCall1P{Int64,Float64}(GateOps.GateLabelP{Int64,Float64}(Symbol("r_y_angle=1.5707963267948966"), Dict{String,Union{Bool, Float64, Int64}}("angle"=>1.5708)), 3, nothing)
+```
+"""
+function r_y(q_target::Int, theta::Number, register::Union{String, Nothing}=nothing)
     if register == nothing
         return GateCall1(GateLabel(Symbol("r_y" * "_" * "angle=" * string(theta)), Dict("angle"=>theta)), q_target )
     else
         return GateCall1(GateLabel(Symbol("r_y" * "_" * "angle=" * string(theta)), Dict("angle"=>theta)), q_target, register )
     end
 end
-function r_z(q_target::Int, theta::Real, register::Union{String, Nothing}=nothing)
+
+"""
+    r_z(q_target::Int, theta::Real, register::Union{String, Nothing}=nothing)
+
+Generate a single qubit R_z(θ) GateCall (GateCall1P) applied to the target qubit (on given register, if provided)
+
+# Examples
+```julia-repl
+julia> GateOps.r_z(3,pi/2)
+GateOps.GateCall1P{Int64,Float64}(GateOps.GateLabelP{Int64,Float64}(Symbol("r_z_angle=1.5707963267948966"), Dict{String,Union{Bool, Float64, Int64}}("angle"=>1.5708)), 3, nothing)
+```
+"""
+function r_z(q_target::Int, theta::Number, register::Union{String, Nothing}=nothing)
     if register == nothing
         return GateCall1(GateLabel(Symbol("r_z" * "_" * "angle=" * string(theta)), Dict("angle"=>theta)), q_target )
     else
         return GateCall1(GateLabel(Symbol("r_z" * "_" * "angle=" * string(theta)), Dict("angle"=>theta)), q_target, register )
     end
 end
-function r_phase(q_target::Int, theta::Real, register::Union{String, Nothing}=nothing)
+
+"""
+    r_phase(q_target::Int, theta::Real, register::Union{String, Nothing}=nothing)
+
+Generate a single qubit phase shift GateCall ( diag(1, exp(1im*theta)) , GateCall1P) applied to the target qubit (on given register, if provided)
+
+# Examples
+```julia-repl
+julia> GateOps.r_phase(3,pi/2)
+GateOps.GateCall1P{Int64,Float64}(GateOps.GateLabelP{Int64,Float64}(Symbol("r_phase_angle=1.5707963267948966"), Dict{String,Union{Bool, Float64, Int64}}("angle"=>1.5708)), 3, nothing)
+```
+"""
+function r_phase(q_target::Int, theta::Number, register::Union{String, Nothing}=nothing)
     if register == nothing
         return GateCall1(GateLabel(Symbol("r_phase" * "_" * "angle=" * string(theta)), Dict("angle"=>theta)), q_target )
     else
@@ -184,18 +301,67 @@ end
 function swap(q_target::Int, q_ctrl::Int, register::Union{String, Nothing}=nothing)
     return GateCall2( GateLabel(:swap), q_target, q_ctrl)
 end
+
+"""
+    c_pauli_x(q_target::Int, q_ctrl::Int, register::Union{String, Nothing}=nothing)
+
+Generate a controlled Pauli-x (two qubit) GateCall (GateCall2P), controlled on the index `q_ctrl` applied to the target `q_target` (on given register, if provided).
+
+# Examples
+```julia-repl
+julia> GateOps.c_pauli_x(0, 1, "qreg")
+GateOps.GateCall2P{Int64,Float64}(GateOps.GateLabelP{Int64,Float64}(:c_x, nothing), 0, 1, GateOps.GateCall1P{Int64,Float64}(GateOps.GateLabelP{Int64,Float64}(:x, nothing), 0, "qreg"), "qreg")
+```
+"""
 function c_pauli_x(q_target::Int, q_ctrl::Int, register::Union{String, Nothing}=nothing)
     return GateCall2( GateLabel(:c_x), q_target, q_ctrl, pauli_x(q_target,register), register)
 end
+
+"""
+    c_pauli_y(q_target::Int, q_ctrl::Int, register::Union{String, Nothing}=nothing)
+
+Generate a controlled Pauli-y (two qubit) GateCall (GateCall2P), controlled on the index `q_ctrl` applied to the target `q_target` (on given register, if provided).
+
+# Examples
+```julia-repl
+julia> GateOps.c_pauli_y(0, 1, "qreg")
+GateOps.GateCall2P{Int64,Float64}(GateOps.GateLabelP{Int64,Float64}(:c_y, nothing), 0, 1, GateOps.GateCall1P{Int64,Float64}(GateOps.GateLabelP{Int64,Float64}(:y, nothing), 0, "qreg"), "qreg")
+```
+"""
 function c_pauli_y(q_target::Int, q_ctrl::Int, register::Union{String, Nothing}=nothing)
     return GateCall2( GateLabel(:c_y), q_target, q_ctrl, pauli_y(q_target,register), register)
 end
+
+"""
+    c_pauli_z(q_target::Int, q_ctrl::Int, register::Union{String, Nothing}=nothing)
+
+Generate a controlled Pauli-x (two qubit) GateCall (GateCall2P), controlled on the index `q_ctrl` applied to the target `q_target` (on given register, if provided).
+
+# Examples
+```julia-repl
+julia> GateOps.c_pauli_z(0, 1, "qreg")
+GateOps.GateCall2P{Int64,Float64}(GateOps.GateLabelP{Int64,Float64}(:c_z, nothing), 0, 1, GateOps.GateCall1P{Int64,Float64}(GateOps.GateLabelP{Int64,Float64}(:z, nothing), 0, "qreg"), "qreg")
+```
+"""
 function c_pauli_z(q_target::Int, q_ctrl::Int, register::Union{String, Nothing}=nothing)
     return GateCall2( GateLabel(:c_z), q_target, q_ctrl, pauli_z(q_target,register), register)
 end
+
 function c_u(label::String, q_target::Int, q_ctrl::Int, params::Dict, register::Union{String, Nothing}=nothing)
     return GateCall2( GateLabel( Symbol(label), params), q_target, q_ctrl, register)
 end
+
+"""
+    c_u(label::GateLabel, q_target::Int, q_ctrl::Int, gc::GateCall1, register::Union{String, Nothing}=nothing)
+
+Generate a controlled unitary (two qubit) GateCall (GateCall2P), controlled on the index `q_ctrl` applied to the target `q_target` (on given register, if provided).
+
+# Examples
+```julia-repl
+julia> GateOps.c_u(GateOps.GateLabel(:myCU), 0, 1, GateOps.pauli_x(0), "q")
+GateOps.GateCall2P{Int64,Float64}(GateOps.GateLabelP{Int64,Float64}(:myCU, nothing), 0, 1, GateOps.GateCall1P{Int64,Float64}(GateOps.GateLabelP{Int64,Float64}(:x, nothing), 0, nothing), "q")
+```
+"""
 function c_u(label::GateLabel, q_target::Int, q_ctrl::Int, gc::GateCall1, register::Union{String, Nothing}=nothing)
     return GateCall2( label, q_target, q_ctrl, gc, register)
 end
@@ -246,11 +412,11 @@ end
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
 
-
+"""Finds rotation angles (a,b,c,d) in the decomposition u=exp(id)*Rz(c).Ry(b).Rz(a).
+Direct port to Julia from qiskit: https://qiskit.org/documentation/_modules/qiskit/extensions/quantum_initializer/squ.html
+"""
 @memoize function mat_to_euler(unitary::Matrix{<:Number})
-    """Finds rotation angles (a,b,c,d) in the decomposition u=exp(id)*Rz(c).Ry(b).Rz(a).
-    Direct port to Julia from qiskit: https://qiskit.org/documentation/_modules/qiskit/extensions/quantum_initializer/squ.html
-    """
+
     u00 = unitary[1, 1]
     u01 = unitary[1, 2]
     u10 = unitary[2, 1]
@@ -287,24 +453,25 @@ end
     return -alpha, -beta, -gamma, delta
 end
 
+"""
+theta, phi, lam, phase - 0.5 * (phi + lam)
 
+- Z(phi) Y(theta) Z(lambda)
+- e^{i gamma}{2})} U_3(theta,phi,lambda)
+"""
 @memoize function zyz_to_u3(a,b,c,d)
-    """
-    theta, phi, lam, phase - 0.5 * (phi + lam)
 
-    - Z(phi) Y(theta) Z(lambda)
-    - e^{i gamma}{2})} U_3(theta,phi,lambda)
-    """
     # Convert exp(id)*Rz(c).Ry(b).Rz(a) angles to u3
     return (b, c, a, d -0.5*(a+c) )
 end
-@memoize function u3_to_zyz(a,b,c,d)
-    """
-    theta, phi, lam, phase - 0.5 * (phi + lam)
 
-    - Z(phi) Y(theta) Z(lambda)
-    - e^{i gamma}{2})} U_3(theta,phi,lambda)
-    """
+"""
+theta, phi, lam, phase - 0.5 * (phi + lam)
+
+- Z(phi) Y(theta) Z(lambda)
+- e^{i gamma}{2})} U_3(theta,phi,lambda)
+"""
+@memoize function u3_to_zyz(a,b,c,d)
     # Convert exp(id)*Rz(c).Ry(b).Rz(a) angles to u3
     return (b, c, a, d -0.5*(a+c) )
 end

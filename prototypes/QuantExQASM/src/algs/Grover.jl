@@ -34,6 +34,13 @@ function mark_state!(cct::Circuit.Circ, state::Integer, qubit_indices::Vector)
     return Oracle.bitstring_phase_oracle(cct::Circuit.Circ, state, qubit_indices[1:end-1], qubit_indices[end])
 end
 
+
+"""
+    run_grover!(cct::Circuit.Circ, qubit_indices::Vector, state::Integer)
+
+Generates a Grover search circuit sample, marking the state defined by `state`
+and performing iterations to amplify the desired result upon measurement.
+"""
 function run_grover!(cct::Circuit.Circ, qubit_indices::Vector, state::Integer)
     num_states = 2^(length(qubit_indices))
     state_init!(cct, qubit_indices)

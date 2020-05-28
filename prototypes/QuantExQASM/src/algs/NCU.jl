@@ -201,6 +201,20 @@ end
 # 
 # =========================================================================== #
 
+"""
+    apply_ncu!(circuit::Circuit.Circ, q_ctrl::Vector, q_aux::Vector, q_tgt, U::GateOps.GateLabel)
+
+Apply an n-qubit controlled gate operation on the given target qubit.
+Ensure the gate corresponding with symbol U is registered with g_map before use.
+Appends the GateCall operations to circuit
+
+# Arguments
+- `circuit::Circuit.Circ`
+- `ctrls::Vector`: 
+- `aux::Vector`: 
+- `tgt::Int`:
+- `U::GateOps.GateLabel`:
+"""
 function apply_ncu!(circuit::Circuit.Circ, q_ctrl::Vector, q_aux::Vector, q_tgt, U::GateOps.GateLabel)
 
     # Check global circuit cache for gate

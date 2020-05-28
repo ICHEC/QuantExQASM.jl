@@ -14,7 +14,6 @@ function apply_x!(c::Circuit.Circ, tgt, reg::Union{String, Nothing}=nothing)
     Circuit.add_gatecall!(c, GateOps.pauli_x(tgt, reg))
 end
 
-
 """
     apply_diffusion(q_reg::String, ctrl_indices::Array{Unsigned,1}, tgt_index)
 
