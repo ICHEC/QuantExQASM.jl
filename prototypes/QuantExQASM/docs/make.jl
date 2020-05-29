@@ -11,8 +11,8 @@ makedocs(
         "Home" => "index.md",
         "Tutorial" => "tutorial.md",
         "Manual" => Any[
-            "Gates" => Any[ "Gate Labels" => "gates/gatelabel.md", "Gate Calls" => "gates/gatecall.md" ],
-            "Circuits" => "circuits/circuits.md",
+            "Gates" => "gates_circuits/GateOps.md",
+            "Circuits" => "gates_circuits/circuits.md",
             "Algorithms" => Any[ "NCU" => "algo/ncu.md", "Grover" => "algo/grover.md" ],
         ],
     ]

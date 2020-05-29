@@ -1,7 +1,0 @@
-# Grover Search
-
-
-## Implementation
-
-
-## API
