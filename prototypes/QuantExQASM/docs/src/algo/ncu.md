@@ -9,6 +9,11 @@ The general principle follows the work of Barenco *et al.*, Phys. Rev. A 52, 345
 ```@docs
 QuantExQASM.NCU.apply_ncu!(circuit::QuantExQASM.Circuit.Circ, q_ctrl::Vector, q_aux::Vector, q_tgt, U::QuantExQASM.GateOps.GateLabel)
 QuantExQASM.NCU.init_intermed_gates(circ::QuantExQASM.Circuit.Circ, num_ctrl::Union{Nothing, Int})
+QuantExQASM.NCU.register_gate(circ::QuantExQASM.Circuit.Circ, U::QuantExQASM.GateOps.GateLabel, gate::Matrix{<:Number})
+QuantExQASM.NCU.gen_intermed_gates(ctrl_depth::Int, U::QuantExQASM.GateOps.GateLabel)
+QuantExQASM.NCU.get_intermed_gate(U::QuantExQASM.GateOps.GateLabel)
+QuantExQASM.NCU.apply_cx!(c::QuantExQASM.Circuit.Circ, ctrl, tgt, reg)
+QuantExQASM.NCU.apply_cu!(c::QuantExQASM.Circuit.Circ, ctrl, tgt, reg, gl::QuantExQASM.GateOps.GateLabel)
 ```
 
 ## Example 
