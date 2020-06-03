@@ -1,3 +1,5 @@
+using Pkg
+Pkg.activate("..")
 using Documenter, QuantExQASM
 
 # Ensure src dir is accessible

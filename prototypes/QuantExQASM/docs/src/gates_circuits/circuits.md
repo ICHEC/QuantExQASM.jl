@@ -5,7 +5,7 @@ To compose a quantum algorithm, we need a structured manner for representing the
 ## Circuit.jl
 The `Circuit.jl` module allows us to structure the gate-calls into a quantum circuit representation. Circuits are appendable, pushable, and are represented under the hood as a doubly linked-list (`CList` from module `CircuitList.jl`), to allow ease of further optimisation and manipulation, if required.
 
-The Circuit module also maintains a cahced mapping from GateLabels to numerical matrices, wherein new gates created are stored for later use by other circuits. This memoization improves the performance of constructing circuits involving calculating submatrices (see the algorithms modules for examples).
+The Circuit module also maintains a cached mapping from GateLabels to numerical matrices, wherein new gates created are stored for later use by other circuits. This memoization improves the performance of constructing circuits involving calculating sub-matrices (see the algorithms modules for examples).
 
 ```@docs
 QuantExQASM.Circuit.Circ

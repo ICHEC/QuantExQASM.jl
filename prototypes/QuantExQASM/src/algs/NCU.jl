@@ -8,6 +8,11 @@ ops_mat_cache = Dict{GateOps.GateLabel, Matrix{<:Number}}()
 # 
 # =========================================================================== #
 
+"""
+    init_intermed_gates(circ::Circuit.Circ, num_ctrl::Union{Nothing, Int})
+
+Generates the required intermediate gates for implementing the NCU using the given Circuit gate-set. Calling this routine is essential before running the NCU.apply_ncu! function.
+"""
 function init_intermed_gates(circ::Circuit.Circ, num_ctrl::Union{Nothing, Int})
     for k in circ.gate_set
         gen_intermed_gates(num_ctrl == nothing ? 8 : num_ctrl, k)
