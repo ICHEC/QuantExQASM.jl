@@ -5,3 +5,8 @@
 Currently, we support a limited set of quantum algoritms (see the `Algorithms` dropdown for details), where the resulting methods can be used to generate OpenQASM output, or integrated with the `PicoQuant.jl` package to create and run a tensor network simulation.
 
 An example of using this package is given in the global repository `protypes/bin` directory as the script `use_cases.jl`.
+
+## Contents
+
+```@contents
+```
