@@ -10,13 +10,13 @@ catch
     Pkg.activate(mod_path) 
     using QuantExQASM
 end
-try
-    using PicoQuant
-catch
+#try
+#    using PicoQuant
+#catch
     mod_path = normpath(joinpath(@__DIR__, "..", "PicoQuant"))
     Pkg.activate(mod_path) 
     using PicoQuant
-end
+#end
 using ArgParse
 using PyCall
 
@@ -214,6 +214,9 @@ function parse_commandline()
             "--run-qiskit"
                 help = "Run the example circuit on Qiskit's QASM simulator"
                 action = :store_true
+            "--run-tn"
+                help = "Run the example circuit on tensor network backend"
+                action = :store_true
         end
         return parse_args(s)
 end
@@ -242,24 +245,20 @@ function run_on_qiskit(circuit)
     return counts
 end
 
-function run_on_qiskit2(circuit)
-    qiskit = pyimport("qiskit")
+function run_tn(circuit)
+    tng = PicoQuant.convert_qiskit_circ_to_network(circuit, decompose=false, transpile=false)
+    big_endian = true
 
-    for i in 0:circuit.num_qubits-1
-        circuit.measure(i, i)
+    qubits = circuit.n_qubits
+    add_input!(tng, "0"^qubits)
+    plan = inorder_contraction_plan(tng)
+    contract_network!(tng, plan, InteractiveExecuter())
+    node = iterate(values(tng.nodes))[1]
+    idx_order = [findfirst(x -> x == i, node.indices) for i in tng.output_qubits]
+    if !big_endian
+        idx_order = idx_order[end:-1:1]
     end
-
-    backend = qiskit.providers.aer.QasmSimulator()
-    backend_options = Dict("method"=>"matrix_product_state", "max_parallel_threads"=>2, "max_parallel_shots"=>4)
-    
-    # Circuit execution
-    job = qiskit.execute(circuit, backend, shots=1000, backend_options=backend_options)
-    # Grab results from the job
-    result = job.result()
-    
-    # Returns counts
-    counts = result.get_counts(circuit)
-    return counts 
+    reshape(permutedims(node.data, idx_order), 2^qubits)
 end
 
 function main()
@@ -296,6 +295,18 @@ function main()
         v = convert(Array{Int}, collect(values(counts)))
         b = barplot(k, v)
         print(b)
+        return;
+    end
+    if parsed_args["run-tn"] == true
+        sv = run_tn(circuit)
+        rho = abs.(sv).^2
+        b = barplot(collect(0:2^qubits-1) , rho)
+        print(b)
+
+        #k = collect(keys(counts))
+        #v = convert(Array{Int}, collect(values(counts)))
+        #b = barplot(k, v)
+        #print(b)
         return;
     end
     # ************************* #
