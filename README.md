@@ -1,3 +1,3 @@
-# Plans and prototypes
+# QuantExQASM.jl
 
-Repository to keep track of project planning, documents, early prototypes and initial designs.
+Circuit composition and OpenQASM translation package for QuantEx project.
