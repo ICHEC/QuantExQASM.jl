@@ -1,0 +1,114 @@
+\section{NCU use-case}
+The application of two-qubit controlled unitary gates (operators) is essential to exploit the full extent of quantum devices. The CNOT (controlled $\sigma_x$) gate is a prime example, allowing the application of $\sigma_x$ to a target qubit if the controlling qubit is $\vert 1 \rangle$. A generalised variant of this gate type extends to $n$-controlling qubits, applying a unitary gate $U$ if they are all $\vert 1 \rangle$. This NCU ($n$-controlled unitary) gate structure can be an important tool in developing many algorithms. As such, we implement methods to generate circuits for realising such NCU gates.
+
+\subsection{Introduction}
+A fundamental element of computer science is branching, where the flow of control in a given program can take different paths based on some controlling logic. The \verb+if-else+ statements can be use to implement such logical control in classical devices. In quantum computing environments, the closest analogous operation are those of controlled unitary ($CU$) gates. The purpose of a CU gate is to apply a given unitary gate to a target qubit depending upon the values of another controlling qubit. The smallest variant of these such gates are the 2-qubit controlled gates, with the controlled-NOT (CNOT), controlled-Z (CZ), and controlled Y-rotation (CR$_{y}$) being three such examples. 
+
+It is known that all larger CU gates with $n$-control qubits (NCU) can be decomposed into fundamental 2-qubit controls~\cite{barenco_elementary_1995}. These gates form the back-bone of many other algorithms, with the diffusion gate in Grover's search algorithm~\cite{grover_1996} being a notable example. As such, having a scalable implementation allowing the use of these gates is important for evaluating many real-world examples and problems.
+
+As a consequence of implementing this gate structure we can gain the following outcomes:
+
+\begin{enumerate}
+\item It enables the implementation of generalised variants of additional quantum algorithms.
+\item It provides functionality unavailable in many other quantum software suites.
+\item It allows for an easy means to generate deep quantum circuits, useful when verifying different tensor contraction and approximation strategies.
+\item Examines the ability of the underlying suite to handle non-local 2-qubit gates at scale.
+\end{enumerate}
+
+
+\subsection{Operations}
+As an example, we can take the 2 qubit controlled-NOT ($\textrm{CNOT}_{c,t}$) gate, wherein the application of the NOT ($\sigma_x$) gate to a target qubit, $t$, is controlled by the values of another qubit, $c$, defined as:
+
+\begin{align}
+\textrm{CNOT}_{c,t}: \vert c \rangle \vert t \rangle 
+\rightarrow 
+(\vert 0 \rangle\langle 0 \vert \otimes \mathds{1} + \vert 1 \rangle\langle 1 \vert \otimes \sigma_x)\vert c \rangle \otimes \vert t.\rangle\end{align}
+
+Applying this operation to all two qubit patterns yields the following truth table:
+\begin{align}
+\textrm{CNOT}_{0,1} \vert 00 \rangle & \rightarrow \vert 00 \rangle \\
+\textrm{CNOT}_{0,1}\vert 01 \rangle & \rightarrow \vert 01 \rangle \\
+\textrm{CNOT}_{0,1}\vert 10 \rangle & \rightarrow \vert 11 \rangle \\
+\textrm{CNOT}_{0,1}\vert 11 \rangle & \rightarrow \vert 10 \rangle.
+\end{align}
+
+
+To extend the above CNOT gate to an $n$-controlled version, we require it to perform the following operation:
+\begin{align}
+\textrm{nCX}_{c_{1},\dots c_{n} ,t} : &\vert c_1 \rangle \dots\vert c_{n} \rangle \vert t \rangle \rightarrow \\ 
+&\vert c_1 \rangle \dots \vert c_{n} \rangle \vert t \oplus (c_{1} \wedge \dots \wedge c_{n}) \rangle .
+\end{align}
+
+
+\subsection{Circuit description and construction}
+
+As a circuit, the above CNOT gate is represented as
+
+\begin{equation*}
+\Qcircuit @C=1em @R=1em {
+    & \ctrl{1} & \qw \\
+    & \targ &  \qw
+},
+\end{equation*}
+which is further expressed as an $n$-controlled variant by
+\begin{equation*}
+\Qcircuit @C=1em @R=1em {
+    & \ctrl{1} & \qw \\
+    & \ctrl{1} & \qw \\
+    & \ctrl{1} & \qw \\
+    & \vdots\qw & \qw \\
+    & \ctrl{1} & \qw \\
+    & \targ &  \qw
+}
+\end{equation*}
+The above circuit can be arbitrarily extended to $n$ controlling qubits for an $n+1$ circuit.
+
+To realise the $n$-controlled variant, we must first decompose the circuit into $2$-qubit gates. As a generalisation to any arbitrary number of control lines and unitary gate, the following decomposition can be applied iteratively to decompose any $n$-controlled unitary to 2-qubit gates~\cite{barenco_elementary_1995}:
+\begin{align}\label{eqn:default_decomp}
+\Qcircuit @C=.5em @R=0em @!R {
+& \ctrl{1} & \qw & & & \qw & \ctrl{1} & \qw & \ctrl{1} & \ctrl{2} & \qw\\
+& \ctrl{1} & \qw & & & \qw & \ctrl{1} & \qw & \ctrl{1} & \ctrl{2} & \qw\\
+& \ctrl{1} & \qw & \push{\rule{.3em}{0em}=\rule{.3em}{0em}} & & \qw & \ctrl{1} & \qw & \ctrl{1} & \ctrl{2} & \qw\\
+& \ctrl{1} & \qw & & & \qw & \ctrl{1} & \qw & \ctrl{1} & \ctrl{2} & \qw\\
+& \ctrl{1} & \qw & & & \ctrl{1} & \targ & \ctrl{1} & \targ & \qw & \qw\\
+& \gate{U} & \qw & & & \gate{\sqrt[\leftroot{-2}\uproot{2}]{U}} & \qw & \gate{\sqrt[\leftroot{-2}\uproot{2}]{U}^\dag} & \qw & \gate{\sqrt[\leftroot{-2}\uproot{2}]{U}} & \qw
+},
+\end{align}
+This decomposition procedure generates a quadratic number of gate calls. For certain NCU gates, more efficient decompositions can be used. For a $3CU$ gate, the following decomposition reduces the call depth from 17 to 13 gates:
+\newcommand{\rtU}[1][U]{\sqrt[4]{#1}}
+\newcommand{\rtUd}[1][U]{\sqrt[4]{#1}^\dagger}
+\begin{align}\label{eqn:3cu_decomp}
+\Qcircuit @C=.5em @R=0em @!R {
+& \ctrl{1} & \qw & & & \qw & \ctrl{3} & \ctrl{1} & \qw & \ctrl{1} & \qw & \qw & \qw & \ctrl{2} & \qw & \qw & \qw & \ctrl{2} & \qw & \qw \\
+& \ctrl{1} & \qw & & & \qw & \qw & \targ & \ctrl{2} & \targ & \ctrl{2} & \ctrl{1} & \qw & \qw & \qw & \ctrl{1} & \qw & \qw & \qw & \qw \\
+& \ctrl{1} & \qw & \push{\rule{.3em}{0em}=\rule{.3em}{0em}}
+ & & \qw & \qw & \qw & \qw & \qw & \qw & \targ & \ctrl{1} & \targ & \ctrl{1} & \targ & \ctrl{1} & \targ & \ctrl{1} & \qw \\
+& \gate{U} & \qw & & &\qw & \gate{\rtU{}} & \qw & \gate{\rtUd{}} & \qw & \gate{\rtU{}} & \qw & \gate{\rtUd{}} & \qw & \gate{\rtU{}} & \qw & \gate{\rtUd{}} & \qw & \gate{\rtU{}} & \qw
+}.
+\end{align}
+
+Additionally, given the existence of auxiliary qubits $n_a$, we can further optimise and reduce the circuit depth for $n$-controlled NOT gates, given $n \geq 5$ and $n_a = n-2$. Further details of this decomposition are given in~\cite[Sec.~7.1]{barenco_elementary_1995}.
+
+For completeness, we implement the above 3 decomposition strategies:
+\begin{itemize}
+\item Default quadratic decomposition as defined by circuit~\eqref{eqn:3cu_decomp} for $n \geq 2$ controls.
+\item Improved 3CU decomposition for $n \eq 3$ controls.
+\item Linear decomposition of $n \geq 5$ controls using $a\geq n-2$ auxiliary qubits.
+\end{itemize}
+
+In addition, due to ability to map CX gates to CZ and vice versa, we implement strategies to ensure all gate decompositions result in diagonal (controlled $\sqrt[k]{Z}$) gates. This ensures compatibility with currently existing simulator and circuit composition suites (e.g IBM Qiskit). As such, we can easily verify these methods and compare with results using existing platforms.
+
+To aid with the decomposition of large NCU structures, the caching of intermediate gates is performed to minimise repeated calculations.
+ 
+\subsection{Testing procedure}
+
+\subsubsection{Validation}
+Starting with a qubit register of $\vert 1 \rangle^{\otimes n}$, we can make use of an $n$ controlled unitary gate, where the control qubits are indexed as $c \in \{q_1,..,q_{n} \}$, and the target qubit as $ t = q_n+1$. We calculate the submatrix decomposition of the unitary matrix $U$ as $V=\sqrt{U}$ and $V^{\dagger}=\sqrt{U}^{\dagger}$. From here, we can recursively call the decomposition routine to further decompose gates with $n>1$ control lines. The base case can then rely on the available 2 qubit $CU$ routines to apply the appropriately decomposed gate matrix.
+
+For validating this we can examine the states for the appropriate target to flip from $\vert 0\rangle$ to $\vert 1 \rangle$. By defining all potential starting states for a given qubit register and applying the NCU operation, we should see the case of $\vert 1 \rangle^{\otimes n} \vert 0 \rangle$ become $\vert 1 \rangle^{\otimes n} \vert 1 \rangle$. Larger NCU circuits will require the use of the optimised modules to ensure reasonable computational complexity. For the purposes of simplicity, we can examine the application of the $n$-controlled Pauli-x gate (NCX) structure to a qubit register of $n+1$ gates, starting in state $\vert \psi \rangle = \vert 1\rangle^{\otimes n} \vert 0 \rangle$. The application of the NCX gate to the register will result in the following state change:
+
+\begin{equation}
+ \textrm{NCX }\vert \psi \rangle = \vert 1\rangle^{\otimes n+1}.
+\end{equation}
+
+For comparison, all other register states but the above will result in no operation being applied to the target qubit in the register.

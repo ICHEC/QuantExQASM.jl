@@ -11,7 +11,9 @@ export append!
 # =========================================================================== #
 
 
-"""Since many different circuits may use the same gates, keeping a module-global 
+"""Global gate cache
+
+Since many different circuits may use the same gates, keeping a module-global 
 cache makes sense to avoid recreating them. Each subcircuit can have a subset of 
 the global cache's gates."""
 gate_cache = Dict{GateOps.GateLabel, Matrix{<:Number}}(
