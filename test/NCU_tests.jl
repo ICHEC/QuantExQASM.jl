@@ -1,27 +1,3 @@
-function run_on_qiskit(qasm_str)
-
-    qiskit = pyimport("qiskit")
-    circuit = qiskit.QuantumCircuit.from_qasm_str(qasm_str)
-
-    for i in 0:circuit.num_qubits-1
-        circuit.measure(i, i)
-    end
-    
-    # Use Aer's qasm_simulator
-    simulator = qiskit.Aer.get_backend("qasm_simulator")
-    
-    # Execute the circuit on the qasm simulator
-    job = qiskit.execute(circuit, simulator, shots=1000)
-    
-    # Grab results from the job
-    result = job.result()
-    
-    # Returns counts
-    counts = result.get_counts(circuit)
-    return counts
-end
-
-
 @testset "Test NCU operation" begin
     # 4 qubit test
     num_qubits = 4
@@ -56,11 +32,16 @@ end
     # Convert circuit to QASM populated buffer
     QuantExQASM.Circuit.to_qasm(cct, true, "out.qasm")
     cct_s = QuantExQASM.Circuit.to_qasm(cct, true)
-
-    counts = run_on_qiskit( String(cct_s) )
     @test begin
+        counts = run_on_qiskit( String(cct_s) )
         "1111" in keys(counts)
         counts["1111"] == 1000
     end
+    @test begin
+        result = run_on_picoquant( cct )
+        println(result)
+        result[16] ≈ 1.0 + 0im
+    end
+
 end
 

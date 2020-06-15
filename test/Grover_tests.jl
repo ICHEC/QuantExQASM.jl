@@ -1,26 +1,3 @@
-function run_on_qiskit(qasm_str)
-
-    qiskit = pyimport("qiskit")
-    circuit = qiskit.QuantumCircuit.from_qasm_str(qasm_str)
-
-    for i in 0:circuit.num_qubits-1
-        circuit.measure(i, i)
-    end
-    
-    # Use Aer's qasm_simulator
-    simulator = qiskit.Aer.get_backend("qasm_simulator")
-    
-    # Execute the circuit on the qasm simulator
-    job = qiskit.execute(circuit, simulator, shots=1000)
-    
-    # Grab results from the job
-    result = job.result()
-    
-    # Returns counts
-    counts = result.get_counts(circuit)
-    return counts
-end
-
 @testset "Test Grover search operation 5 qubits" begin
     # 4 qubit test
     num_qubits = 5
@@ -35,23 +12,27 @@ end
     # Convert circuit to QASM populated buffer
     cct_s = QuantExQASM.Circuit.to_qasm(cct, true)
 
-    bit_pattern_s = reverse(join(digits(bit_pattern, base=2,pad=num_qubits)))
+    bit_pattern_s = reverse(join(digits(bit_pattern, base=2, pad=num_qubits)))
 
     # Convert circuit to QASM populated buffer
     cct_s = QuantExQASM.Circuit.to_qasm(cct, true)
 
-    counts = run_on_qiskit( String(cct_s) )
-
     @test begin
+        counts = run_on_qiskit( String(cct_s) )
         bit_pattern_s in keys(counts)
         counts[bit_pattern_s] > 800
     end
+
+    @test begin
+        sv = run_on_picoquant( cct )
+        rho = abs.(sv).^2
+        rho[bit_pattern+1] > 0.8
+    end
 end
 
-
-@testset "Test Grover search operation 7 qubits" begin
+@testset "Test Grover search operation 6 qubits" begin
     # 7 qubit test
-    num_qubits = 7
+    num_qubits = 6
     use_aux_qubits = false
     bit_pattern = 37
 
@@ -68,11 +49,16 @@ end
     # Convert circuit to QASM populated buffer
     cct_s = QuantExQASM.Circuit.to_qasm(cct, true)
 
-    counts = run_on_qiskit( String(cct_s) )
-
     @test begin
+        counts = run_on_qiskit( String(cct_s) )
+
         bit_pattern_s in keys(counts)
         counts[bit_pattern_s] > 800
+    end
+    @test begin
+        sv = run_on_picoquant( cct )
+        rho = abs.(sv).^2
+        rho[bit_pattern+1] > 0.8
     end
 end
 
