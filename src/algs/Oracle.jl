@@ -9,7 +9,7 @@ function apply_x!(c::Circuit.Circ, tgt, reg::Union{String, Nothing}=nothing)
 end
 
 """
-    bitstring_ncu(bitstring::Unsigned, ctrl_indices::Vector, tgt_idx, U::Symbol)
+    bitstring_ncu(cct::Circuit.Circ, bitstring::Integer, ctrl_indices::Vector, tgt_idx, U::GateOps.GateLabel) 
 
 Takes bitstring as the binary pattern and indices as the qubits to operate upon. Applies the appropriate PauliX gates to the control lines to call the NCU with the given matrix 
 """
@@ -40,12 +40,51 @@ function bitstring_ncu(cct::Circuit.Circ, bitstring::Integer, ctrl_indices::Vect
 end
 
 """
+    bitstring_ncu(cct::Circuit.Circ, bitstring::Integer, ctrl_indices::Vector, aux_indices::Vector, tgt_idx, U::GateOps.GateLabel)
+
+Takes bitstring as the binary pattern and indices as the qubits to operate upon. Applies the appropriate PauliX gates to the control lines to call the NCU with the given matrix. Uses aux_indices to reduce circuit depth by expanding width.
+"""
+function bitstring_ncu(cct::Circuit.Circ, bitstring::Integer, ctrl_indices::Vector, aux_indices::Vector, tgt_idx, U::GateOps.GateLabel)
+    bitmask =  0x1
+
+    # Filter qubit values to mark specified pattern
+    for idx in collect(0:length(ctrl_indices))
+        if ~( (bitstring & (bitmask << idx) ) != 0)
+            if idx < length(ctrl_indices)
+                apply_x!(cct, ctrl_indices[idx+1])
+            else
+                apply_x!(cct, tgt_idx)
+            end
+        end
+    end
+    NCU.apply_ncu!(cct, ctrl_indices, aux_indices, tgt_idx, U)
+    for idx in collect(0:length(ctrl_indices))
+        if ~( (bitstring & (bitmask << idx) ) != 0)
+            if idx < length(ctrl_indices)
+                apply_x!(cct, ctrl_indices[idx+1])
+            else
+                apply_x!(cct, tgt_idx)
+            end
+        end
+    end
+end
+
+"""
     bitstring_phase_oracle(bitstring::Unsigned, ctrl_indices::Vector, tgt_idx::Unsigned)
 
 Applies PauliX gates to the appropriate lines in the circuit, then applies a n-controlled PauliZ to mark the state.
 """
 function bitstring_phase_oracle(cct::Circuit.Circ, bitstring::Integer, ctrl_indices::Vector, tgt_idx)
     return bitstring_ncu(cct, bitstring, ctrl_indices, tgt_idx, GateOps.GateLabel(:z) )
+end
+
+"""
+    bitstring_phase_oracle(cct::Circuit.Circ, bitstring::Integer, ctrl_indices::Vector, tgt_idx)
+
+Applies PauliX gates to the appropriate lines in the circuit, then applies a n-controlled PauliZ to mark the state. Uses aux qubits to reduce circuit depth.
+"""
+function bitstring_phase_oracle(cct::Circuit.Circ, bitstring::Integer, ctrl_indices::Vector, aux_indices::Vector, tgt_idx)
+    return bitstring_ncu(cct, bitstring, ctrl_indices, aux_indices, tgt_idx, GateOps.GateLabel(:z) )
 end
 
 end

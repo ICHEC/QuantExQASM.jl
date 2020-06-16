@@ -135,6 +135,7 @@ function apply_ncu!(circuit::Circuit.Circ, q_ctrl::Vector, q_aux::Vector, q_tgt,
     push!(circuit.gate_set, asu)
 
     if length(q_ctrl) == 2
+
         apply_cu!(circuit, q_ctrl[2], q_tgt, nothing, su)
         apply_cx!(circuit, q_ctrl[1], q_ctrl[2], nothing)
         apply_cu!(circuit, q_ctrl[2], q_tgt,  nothing, asu)
@@ -142,6 +143,7 @@ function apply_ncu!(circuit::Circuit.Circ, q_ctrl::Vector, q_aux::Vector, q_tgt,
         apply_cu!(circuit, q_ctrl[1], q_tgt,  nothing, su)
 
     elseif length(q_ctrl) == 3
+
         ssu,assu = get_intermed_gate(su)
         push!(circuit.gate_set, ssu)
         push!(circuit.gate_set, assu)
@@ -161,6 +163,7 @@ function apply_ncu!(circuit::Circuit.Circ, q_ctrl::Vector, q_aux::Vector, q_tgt,
         apply_cu!(circuit, q_ctrl[3], q_tgt, nothing, ssu)
         
     elseif (length(q_ctrl)>=5) && (length(q_aux)>=length(q_ctrl)-2) && (U == GateOps.GateLabel(:x))
+
         apply_ncu!(circuit, [q_ctrl[end], q_aux[ 1 + length(q_ctrl)-3 ]], Int[], q_tgt, U)
         for i in reverse(2:length(q_ctrl)-2)
             apply_ncu!(circuit, [q_ctrl[1 + i], q_aux[1 + (i-2)]], Int[], q_aux[1 + (i-1)], U)
@@ -180,7 +183,36 @@ function apply_ncu!(circuit::Circuit.Circ, q_ctrl::Vector, q_aux::Vector, q_tgt,
         for i in 2:length(q_ctrl)-2
             apply_ncu!(circuit, [q_ctrl[1 + i], q_aux[1 + (i-2)]], Int[], q_aux[1 + (i-1)], U)
         end
+
+    elseif (length(q_ctrl)>=5) && (length(q_aux)>=length(q_ctrl)-2) && (U == GateOps.GateLabel(:z))
+
+        gl = GateOps.GateLabel(:x)
+        Circuit.add_gatecall!(circuit, GateOps.hadamard(q_tgt, nothing))
+
+        apply_ncu!(circuit, [q_ctrl[end], q_aux[ 1 + length(q_ctrl)-3 ]], Int[], q_tgt, gl)
+        for i in reverse(2:length(q_ctrl)-2)
+            apply_ncu!(circuit, [q_ctrl[1 + i], q_aux[1 + (i-2)]], Int[], q_aux[1 + (i-1)], gl)
+        end
+        
+        apply_ncu!(circuit, [q_ctrl[1], q_ctrl[2]], Int[], q_aux[1], gl)
+        for i in 2:length(q_ctrl)-2
+            apply_ncu!(circuit, [q_ctrl[1 + i], q_aux[1 + (i-2)]], Int[], q_aux[1 + (i-1)], gl)
+        end
+        
+        apply_ncu!(circuit, [q_ctrl[end], q_aux[1 + length(q_ctrl) - 3]], Int[], q_tgt, gl)
+        for i in reverse(2:length(q_ctrl)-2)
+            apply_ncu!(circuit, [q_ctrl[1 + i], q_aux[1 + (i-2)]], Int[], q_aux[1 + (i-1)], gl)
+        end
+        
+        apply_ncu!(circuit, [q_ctrl[1], q_ctrl[2]], Int[], q_aux[1], gl)
+        for i in 2:length(q_ctrl)-2
+            apply_ncu!(circuit, [q_ctrl[1 + i], q_aux[1 + (i-2)]], Int[], q_aux[1 + (i-1)], gl)
+        end
+
+        Circuit.add_gatecall!(circuit, GateOps.hadamard(q_tgt, nothing))
+
     else
+        
         apply_cu!(circuit, q_ctrl[end], q_tgt, nothing, su)
         apply_ncu!(circuit, q_ctrl[1:end-1], q_aux, q_ctrl[end], GateOps.GateLabel(:x))
         apply_cu!(circuit, q_ctrl[end], q_tgt, nothing, asu)
@@ -192,7 +224,5 @@ function apply_ncu!(circuit::Circuit.Circ, q_ctrl::Vector, q_aux::Vector, q_tgt,
     return circuit
 
 end
-
-
 
 end

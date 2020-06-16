@@ -28,6 +28,29 @@ function run_on_qiskit(qasm_str)
     return counts
 end
 
+
+function get_statevector_using_picoquant(circ; big_endian=false)
+    PicoQuant.InteractiveBackend()
+    tn = PicoQuant.convert_qiskit_circ_to_network(circ, decompose=true, transpile=false)
+    qubits = circ.n_qubits
+    add_input!(tn, "0"^qubits)
+    # contract all input nodes together
+    full_wf = tn.edges[tn.input_qubits[1]].src
+    for i in 2:tn.number_qubits
+        full_wf = contract_pair!(tn, full_wf, tn.edges[tn.input_qubits[i]].src)
+    end
+    plan = PicoQuant.inorder_contraction_plan(tn)
+    PicoQuant.contract_network!(tn, plan)
+    node = iterate(values(tn.nodes))[1]
+    idx_order = [findfirst(x -> x == i, node.indices) for i in tn.output_qubits]
+    if !big_endian
+        idx_order = idx_order[end:-1:1]
+    end
+    reshape(permutedims(backend.tensors[:result], idx_order), 2^qubits)
+end
+
+
+
 function run_on_picoquant(circuit)
     PicoQuant.InteractiveBackend()
     qiskit = pyimport("qiskit")
