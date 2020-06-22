@@ -25,7 +25,7 @@ below on using different python environments.
 
 ```
 ]activate .
-]instantiate .
+]instantiate
 ]build QuantExQASM
 ```
 
