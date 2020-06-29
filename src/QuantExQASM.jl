@@ -14,5 +14,6 @@ include("algs/NCU.jl")
 include("algs/Oracle.jl")
 include("algs/Diffusion.jl")
 include("algs/Grover.jl")
+include("Algorithms.jl")
 
 end 
