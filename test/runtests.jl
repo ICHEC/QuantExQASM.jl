@@ -50,16 +50,10 @@ function get_statevector_using_picoquant(circ; big_endian=false)
 end
 
 
-
 function run_on_picoquant(circuit)
     PicoQuant.InteractiveBackend()
-    qiskit = pyimport("qiskit")
 
-    cct_s = QuantExQASM.Circuit.to_qasm(circuit, true)
-
-    q_circuit = qiskit.QuantumCircuit.from_qasm_str( String(cct_s) )
-
-    tng = PicoQuant.convert_qiskit_circ_to_network( q_circuit, decompose=false, transpile=false)
+    tng = PicoQuant.convert_qiskit_circ_to_network( circuit, decompose=true, transpile=false)
     big_endian = true
 
     qubits = circuit.num_qubits
