@@ -10,6 +10,11 @@
         rho = abs.(sv).^2
         rho[bit_pattern+1] > 0.8
     end
+    @test begin
+        sv = get_statevector_using_picoquant_mps( qq_cct, big_endian=true )
+        rho = abs.(sv).^2
+        rho[bit_pattern+1] > 0.8
+    end
 end
 
 @testset "Test optimised Grover search operation 5+1+3 qubits (Ctrl, Tgt, Aux)" begin
@@ -22,6 +27,11 @@ end
 
     @test begin
         sv = get_statevector_using_picoquant( qq_cct, big_endian=true )
+        rho = abs.(sv).^2
+        rho[bit_pattern+1] > 0.8
+    end
+    @test begin
+        sv = get_statevector_using_picoquant_mps( qq_cct, big_endian=true )
         rho = abs.(sv).^2
         rho[bit_pattern+1] > 0.8
     end
@@ -39,6 +49,11 @@ end
         rho = abs.(sv).^2
         rho[bit_pattern+1] > 0.8
     end
+    @test begin
+        sv = get_statevector_using_picoquant_mps( qq_cct, big_endian=true )
+        rho = abs.(sv).^2
+        rho[bit_pattern+1] > 0.8
+    end 
 end
 
 @testset "Test optimised Grover search operation 6+1+4 qubits (Ctrl, Tgt, Aux)" begin
@@ -53,4 +68,9 @@ end
         rho = abs.(sv).^2
         rho[bit_pattern+1] > 0.8
     end
+    @test begin
+        sv = get_statevector_using_picoquant_mps( qq_cct, big_endian=true )
+        rho = abs.(sv).^2
+        rho[bit_pattern+1] > 0.8
+    end 
 end

@@ -49,6 +49,21 @@ function get_statevector_using_picoquant(circ; big_endian=false)
     reshape(permutedims(backend.tensors[:result], idx_order), 2^qubits)
 end
 
+"""
+    function get_statevector_using_picoquant(circ; big_endian=false)
+Uses picoquant to calculate statevector resulting from given circuit
+"""
+function get_statevector_using_picoquant_mps(circuit; big_endian=false)
+    PicoQuant.InteractiveBackend()
+    tn = PicoQuant.convert_qiskit_circ_to_network(circuit, decompose=true, transpile=true)
+    qubits = circuit.num_qubits
+    add_input!(tn, "0"^qubits)
+    # contract all input nodes together
+    mps_nodes = contract_mps_tensor_network_circuit!(tn, max_bond=1)
+    calculate_mps_amplitudes!(tn, mps_nodes)
+    d = load_tensor_data(backend, :result)
+    return d
+end
 
 function run_on_picoquant(circuit)
     PicoQuant.InteractiveBackend()

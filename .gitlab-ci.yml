@@ -25,7 +25,11 @@
   script:
     # Let's run the tests. Substitute `coverage = false` below, if you do not
     # want coverage results.
-    - julia -e 'using Pkg; Pkg.clone(pwd()); Pkg.build("QuantExQASM"); Pkg.test("QuantExQASM"; coverage = true)'
+    - julia -e 'using Pkg; Pkg.add(PackageSpec(url="https://github.com/ICHEC/PicoQuant.jl")); 
+        Pkg.add(PackageSpec(path=pwd())); 
+        Pkg.instantiate(); 
+        Pkg.build("QuantExQASM"); 
+        Pkg.test("QuantExQASM"; coverage = true)'
     # Comment out below if you do not want coverage results.
     - julia -e 'using Pkg; Pkg.add("Coverage");
       import QuantExQASM; cd(joinpath(dirname(pathof(QuantExQASM)), ".."));
