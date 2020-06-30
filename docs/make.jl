@@ -1,9 +1,4 @@
-using Pkg
-Pkg.activate("..")
 using Documenter, QuantExQASM
-
-# Ensure src dir is accessible
-push!(LOAD_PATH,"../src/")
 
 makedocs(
     modules = [QuantExQASM],
@@ -18,4 +13,7 @@ makedocs(
             "Algorithms" => Any[ "NCU" => "algo/ncu.md", "Grover" => "algo/grover.md" ],
         ],
     ]
+)
+deploydocs(
+    repo = "github.com/ICHEC/QuantExQASM.jl.git",
 )
