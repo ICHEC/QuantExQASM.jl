@@ -21,3 +21,12 @@ jobs:
                                     Pkg.instantiate()'
         - julia --project=docs/ docs/make.jl
       after_success: skip
+deploy:
+  provider: pages
+  skip_cleanup: true
+  github_token: $TRAVIS_DOCS   # Set in the settings page of your repository, as a secure variable
+  keep_history: true
+  on:
+    branch: master
+  local_dir: docs/build
+  target_branch: gh-pages
