@@ -1,4 +1,2 @@
 [deps]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
-PicoQuant = "2db47837-5a65-4a20-8d0f-8ec2491baa53"
-QuantExQASM = "630b6936-434f-11ea-2df3-976e72da0e99"
