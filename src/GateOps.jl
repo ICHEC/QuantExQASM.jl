@@ -368,17 +368,64 @@ end
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
 
+"""
+    c_r_x(q_target::Int, q_ctrl::Int, theta::Real, register::Union{String, Nothing}=nothing)
+
+Generate a controlled rotation about x (exp(iθσ_x/2)) GateCall (GateCall2P), controlled on the index `q_ctrl` applied to the target `q_target` (on given register, if provided).
+
+# Examples
+```julia-repl
+julia> QuantExQASM.GateOps.c_r_x( 0, 1, pi/2, "q")
+QuantExQASM.GateOps.GateCall2P{Int64,Float64}(QuantExQASM.GateOps.GateLabelP{Int64,Float64}(Symbol("c_r_x_angle=1.5707963267948966"), Dict{String,Union{Bool, Float64, Int64}}("angle" => 1.5707963267948966)), 0, 1, nothing, nothing)
+```
+"""
 function c_r_x(q_target::Int, q_ctrl::Int, theta::Real, register::Union{String, Nothing}=nothing)
     return GateCall2( GateLabel( Symbol("c_r_x" * "_" * "angle=" * string(theta)), Dict("angle"=>theta) ), q_target, q_ctrl )
 end
+
+"""
+    c_r_y(q_target::Int, q_ctrl::Int, theta::Real, register::Union{String, Nothing}=nothing)
+
+Generate a controlled rotation about y (exp(iθσ_y/2)) GateCall (GateCall2P), controlled on the index `q_ctrl` applied to the target `q_target` (on given register, if provided).
+
+# Examples
+```julia-repl
+julia> QuantExQASM.GateOps.c_r_y( 0, 1, pi/3, "q")
+QuantExQASM.GateOps.GateCall2P{Int64,Float64}(QuantExQASM.GateOps.GateLabelP{Int64,Float64}(Symbol("c_r_y_angle=1.0471975511965976"), Dict{String,Union{Bool, Float64, Int64}}("angle" => 1.0471975511965976)), 0, 1, nothing, nothing)
+```
+"""
 function c_r_y(q_target::Int, q_ctrl::Int, theta::Real, register::Union{String, Nothing}=nothing)
-    return GateCall2( GateLabel( Symbol("c_r_y" * "_" * "angle=" * string(theta)), Dict("angle"=>theta) ), q_target, q_ctrl, Dict("theta"=>theta) )
+    return GateCall2( GateLabel( Symbol("c_r_y" * "_" * "angle=" * string(theta)), Dict("angle"=>theta) ), q_target, q_ctrl )
 end
+
+"""
+    c_r_z(q_target::Int, q_ctrl::Int, theta::Real, register::Union{String, Nothing}=nothing)
+
+Generate a controlled rotation about z (exp(iθσ_z/2)) GateCall (GateCall2P), controlled on the index `q_ctrl` applied to the target `q_target` (on given register, if provided).
+
+# Examples
+```julia-repl
+julia> QuantExQASM.GateOps.c_r_z( 0, 1, pi/4, "q")
+QuantExQASM.GateOps.GateCall2P{Int64,Float64}(QuantExQASM.GateOps.GateLabelP{Int64,Float64}(Symbol("c_r_z_angle=0.7853981633974483"), Dict{String,Union{Bool, Float64, Int64}}("angle" => 0.7853981633974483)), 0, 1, nothing, nothing)
+```
+"""
 function c_r_z(q_target::Int, q_ctrl::Int, theta::Real, register::Union{String, Nothing}=nothing)
-    return GateCall2( GateLabel( Symbol("c_r_z" * "_" * "angle=" * string(theta)), Dict("angle"=>theta) ), q_target, q_ctrl, Dict("theta"=>theta) )
+    return GateCall2( GateLabel( Symbol("c_r_z" * "_" * "angle=" * string(theta)), Dict("angle"=>theta) ), q_target, q_ctrl )
 end
+
+"""
+    c_r_phase(q_target::Int, q_ctrl::Int, theta::Real, register::Union{String, Nothing}=nothing)
+
+Generate a controlled phase rotation about (controlled [1 0; 0 exp(iθ)] GateCall (GateCall2P), controlled on the index `q_ctrl` applied to the target `q_target` (on given register, if provided).
+
+# Examples
+```julia-repl
+julia> QuantExQASM.GateOps.c_r_phase( 0, 1, pi/7, "q")
+QuantExQASM.GateOps.GateCall2P{Int64,Float64}(QuantExQASM.GateOps.GateLabelP{Int64,Float64}(Symbol("c_r_phase_angle=0.4487989505128276"), Dict{String,Union{Bool, Float64, Int64}}("angle" => 0.4487989505128276)), 0, 1, nothing, nothing)
+```
+"""
 function c_r_phase(q_target::Int, q_ctrl::Int, theta::Real, register::Union{String, Nothing}=nothing)
-    return GateCall2( GateLabel( Symbol("c_r_phase" * "_" * "angle=" * string(theta)), Dict("angle"=>theta) ), q_target, q_ctrl, Dict("theta"=>theta) )
+    return GateCall2( GateLabel( Symbol("c_r_phase" * "_" * "angle=" * string(theta)), Dict("angle"=>theta) ), q_target, q_ctrl )
 end
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #

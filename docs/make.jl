@@ -6,7 +6,7 @@ makedocs(
     sitename = "QuantExQASM.jl",
     pages = Any[
         "Home" => "index.md",
-        "Tutorial" => "tutorial.md",
+        #"Tutorial" => "tutorial.md",
         "Manual" => Any[
             "Gates" => "gates_circuits/GateOps.md",
             "Circuits" => "gates_circuits/circuits.md",

@@ -4,9 +4,6 @@
 """
 module QuantExQASM
 
-#Automagically export all symbols from included modules
-using Reexport
-
 include("GateOps.jl")
 include("CircuitList.jl")
 include("Circuit.jl")
