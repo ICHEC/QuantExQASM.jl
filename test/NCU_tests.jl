@@ -4,11 +4,11 @@
     cct_s = QuantExQASM.Algorithms.create_ncu_circuit(num_qubits)
 
     @test begin
-        result = get_statevector_using_picoquant( cct_s, big_endian=true )
+        result = get_statevector_using_qiskit( cct_s, big_endian=true )
         result[2^num_qubits] ≈ 1.0 + 0im
     end
     @test begin
-        result = get_statevector_using_picoquant_mps( cct_s )
+        result = get_statevector_using_picoquant( cct_s, big_endian=true )
         result[2^num_qubits] ≈ 1.0 + 0im
     end
 end
@@ -19,11 +19,11 @@ end
     cct_s = QuantExQASM.Algorithms.create_ncu_circuit(num_qubits, true)
 
     @test begin
-        result = get_statevector_using_picoquant( cct_s, big_endian=true )
+        result = get_statevector_using_qiskit( cct_s, big_endian=true )
         result[2^Int(ceil(num_qubits/2)) + 2^(num_qubits-1)] ≈ 1.0 + 0im
     end
     @test begin
-        result = get_statevector_using_picoquant_mps( cct_s )
+        result = get_statevector_using_picoquant( cct_s, big_endian=true )
         result[2^Int(ceil(num_qubits/2)) + 2^(num_qubits-1)] ≈ 1.0 + 0im
     end
 end
