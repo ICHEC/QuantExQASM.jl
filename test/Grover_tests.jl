@@ -6,12 +6,12 @@
     qq_cct = QuantExQASM.Algorithms.create_grover_circuit(num_qubits, use_aux_qubits, bit_pattern)
 
     @test begin
-        sv = get_statevector_using_picoquant( qq_cct, big_endian=true )
+        sv = get_statevector_using_qiskit( qq_cct, big_endian=true )
         rho = abs.(sv).^2
         rho[bit_pattern+1] > 0.8
     end
     @test begin
-        sv = get_statevector_using_picoquant_mps( qq_cct, big_endian=true )
+        sv = get_statevector_using_picoquant( qq_cct, big_endian=true )
         rho = abs.(sv).^2
         rho[bit_pattern+1] > 0.8
     end
@@ -26,12 +26,12 @@ end
     qq_cct = QuantExQASM.Algorithms.create_grover_circuit(num_qubits, use_aux_qubits, bit_pattern)
 
     @test begin
-        sv = get_statevector_using_picoquant( qq_cct, big_endian=true )
+        sv = get_statevector_using_qiskit( qq_cct, big_endian=true )
         rho = abs.(sv).^2
         rho[bit_pattern+1] > 0.8
     end
     @test begin
-        sv = get_statevector_using_picoquant_mps( qq_cct, big_endian=true )
+        sv = get_statevector_using_picoquant( qq_cct, big_endian=true )
         rho = abs.(sv).^2
         rho[bit_pattern+1] > 0.8
     end
@@ -45,12 +45,12 @@ end
     qq_cct = QuantExQASM.Algorithms.create_grover_circuit(num_qubits, use_aux_qubits, bit_pattern)
 
     @test begin
-        sv = get_statevector_using_picoquant( qq_cct, big_endian=true )
+        sv = get_statevector_using_qiskit( qq_cct, big_endian=true )
         rho = abs.(sv).^2
         rho[bit_pattern+1] > 0.8
     end
     @test begin
-        sv = get_statevector_using_picoquant_mps( qq_cct, big_endian=true )
+        sv = get_statevector_using_picoquant( qq_cct, big_endian=true )
         rho = abs.(sv).^2
         rho[bit_pattern+1] > 0.8
     end 
@@ -64,12 +64,12 @@ end
     qq_cct = QuantExQASM.Algorithms.create_grover_circuit(num_qubits, use_aux_qubits, bit_pattern)
 
     @test begin
-        sv = get_statevector_using_picoquant( qq_cct, big_endian=true )
+        sv = get_statevector_using_qiskit( qq_cct, big_endian=true )
         rho = abs.(sv).^2
         rho[bit_pattern+1] > 0.8
     end
     @test begin
-        sv = get_statevector_using_picoquant_mps( qq_cct, big_endian=true )
+        sv = get_statevector_using_picoquant( qq_cct, big_endian=true )
         rho = abs.(sv).^2
         rho[bit_pattern+1] > 0.8
     end 
